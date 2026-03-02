@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -22,15 +23,57 @@ var (
 	date    = "unknown"
 )
 
+func resolveDSN(args []string, getenv func(string) string) (string, error) {
+	if len(args) > 2 {
+		return "", fmt.Errorf("usage: %s [<database-path-or-dsn>]", args[0])
+	}
+	if len(args) == 2 {
+		return args[1], nil
+	}
+	if dsn := getenv("ASQL_DSN"); dsn != "" {
+		return dsn, nil
+	}
+	if dsn := getenv("DATABASE_URL"); dsn != "" {
+		return dsn, nil
+	}
+	return "", fmt.Errorf("usage: %s <database-path-or-dsn>\n  or set ASQL_DSN / DATABASE_URL environment variable", args[0])
+}
+
+func maskDSN(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return dsn
+	}
+	masked := false
+	// Mask userinfo password (user:password@host)
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			u.User = url.UserPassword(u.User.Username(), "***")
+			masked = true
+		}
+	}
+	// Mask query parameter password (?password=secret)
+	q := u.Query()
+	if q.Get("password") != "" {
+		q.Set("password", "***")
+		u.RawQuery = q.Encode()
+		masked = true
+	}
+	if !masked {
+		return dsn
+	}
+	return u.String()
+}
+
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "usage: %s <database-path-or-dsn>\n", os.Args[0])
+	dbPath, err := resolveDSN(os.Args, os.Getenv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	dbPath := os.Args[1]
+	displayDSN := maskDSN(dbPath)
 
-	var err error
 	var adapter dbpkg.DBAdapter
 
 	switch {
@@ -42,7 +85,7 @@ func main() {
 		adapter, err = sqlite.Open(dbPath)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to open database %q: %v\n", dbPath, err)
+		fmt.Fprintf(os.Stderr, "failed to open database %q: %v\n", displayDSN, err)
 		os.Exit(1)
 	}
 	defer adapter.Close()
@@ -58,7 +101,7 @@ func main() {
 	}
 
 	program := tea.NewProgram(
-		ui.NewModel(adapter, dbPath, aiClient),
+		ui.NewModel(adapter, displayDSN, aiClient),
 		tea.WithAltScreen(),
 	)
 
