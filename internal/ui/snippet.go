@@ -11,6 +11,22 @@ import (
 	"github.com/kwrkb/asql/internal/snippet"
 )
 
+func (m model) enterSnippetNamingMode() (tea.Model, tea.Cmd) {
+	query := strings.TrimSpace(m.textarea.Value())
+	if query == "" {
+		m.setStatus("No query to save", true)
+		return m, nil
+	}
+	m.snippetPrevMode = m.mode
+	m.mode = snippetMode
+	m.snippetNaming = true
+	m.snippetInput.Reset()
+	m.snippetInput.Focus()
+	m.textarea.Blur()
+	m.setStatus("Save snippet", false)
+	return m, textinput.Blink
+}
+
 func (m model) updateSnippet(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.snippetNaming {
 		return m.updateSnippetNaming(msg)
@@ -37,9 +53,7 @@ func (m model) updateSnippet(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "d":
 			if len(m.snippets) > 0 {
-				newSnippets := make([]snippet.Snippet, 0, len(m.snippets)-1)
-				newSnippets = append(newSnippets, m.snippets[:m.snippetCursor]...)
-				newSnippets = append(newSnippets, m.snippets[m.snippetCursor+1:]...)
+				newSnippets := append(m.snippets[:m.snippetCursor], m.snippets[m.snippetCursor+1:]...)
 				if err := snippet.Save(newSnippets); err != nil {
 					m.setStatus(fmt.Sprintf("Save failed: %v", err), true)
 				} else {
@@ -113,6 +127,14 @@ func (m model) updateSnippetNaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("Save failed: %v", err), true)
 			m.snippetNaming = false
 			m.snippetInput.Blur()
+			// Restore previous mode on failure (same as Esc path)
+			if m.snippetPrevMode != "" {
+				m.mode = m.snippetPrevMode
+				m.snippetPrevMode = ""
+				if m.mode == insertMode {
+					m.textarea.Focus()
+				}
+			}
 			return m, nil
 		}
 		m.snippets = newSnippets
@@ -190,14 +212,14 @@ func (m model) renderWithSnippetOverlay(background string) string {
 
 		for i := start; i < end; i++ {
 			s := m.snippets[i]
-			label := s.Name
+			label := sanitize(s.Name)
 			if i == m.snippetCursor {
 				items.WriteString(selectedStyle.Render(label))
 			} else {
 				items.WriteString(itemStyle.Render(label))
 			}
-			// Show query preview (truncated, rune-safe)
-			preview := s.Query
+			// Show query preview: sanitize, flatten newlines to spaces, then truncate (rune-safe)
+			preview := strings.Join(strings.Fields(sanitize(s.Query)), " ")
 			maxPreview := modalWidth - 10
 			runes := []rune(preview)
 			if maxPreview > 0 && len(runes) > maxPreview {
