@@ -22,8 +22,15 @@ func (c Config) AIEnabled() bool {
 	return c.AI.Endpoint != "" && c.AI.Model != ""
 }
 
+func configDir() (string, error) {
+	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+		return d, nil
+	}
+	return os.UserConfigDir()
+}
+
 func Load() (Config, error) {
-	dir, err := os.UserConfigDir()
+	dir, err := configDir()
 	if err != nil {
 		return Config{}, fmt.Errorf("finding user config dir: %w", err)
 	}

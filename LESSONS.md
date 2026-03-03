@@ -272,6 +272,27 @@ m.querySeq++
 m.queryCancel = cancel
 ```
 
+### macOS では os.UserConfigDir() が XDG_CONFIG_HOME を無視する
+
+**文脈**: `Load()` で `os.UserConfigDir()` を使っていたが、テストで `t.Setenv("XDG_CONFIG_HOME", tmpDir)` しても macOS では反映されず、テストが失敗した。WSL (Linux) では `os.UserConfigDir()` が `$XDG_CONFIG_HOME` を参照するため通っていた。
+
+**学び**: Go の `os.UserConfigDir()` は OS ごとに挙動が異なる:
+- **Linux**: `$XDG_CONFIG_HOME` → fallback `~/.config`
+- **macOS**: **常に** `~/Library/Application Support`（`XDG_CONFIG_HOME` を無視）
+- **Windows**: `%AppData%`
+
+テストで設定ディレクトリを差し替えたい場合、`os.UserConfigDir()` だけに依存すると macOS で壊れる。
+
+**パターン**: `XDG_CONFIG_HOME` を明示的に先にチェックするヘルパーを挟む:
+```go
+func configDir() (string, error) {
+    if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+        return d, nil
+    }
+    return os.UserConfigDir()
+}
+```
+
 ### os.UserConfigDir() 等の環境エラーを握りつぶさない
 
 **文脈**: `os.UserConfigDir()` がエラーを返した場合に `Config{}, nil` を返していた。設定ディレクトリのパーミッションエラー等がサイレントに無視され、デバッグ困難に。
