@@ -40,13 +40,13 @@ func (m model) updateSnippet(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				newSnippets := make([]snippet.Snippet, 0, len(m.snippets)-1)
 				newSnippets = append(newSnippets, m.snippets[:m.snippetCursor]...)
 				newSnippets = append(newSnippets, m.snippets[m.snippetCursor+1:]...)
-				m.snippets = newSnippets
-				if m.snippetCursor >= len(m.snippets) && m.snippetCursor > 0 {
-					m.snippetCursor--
-				}
-				if err := snippet.Save(m.snippets); err != nil {
+				if err := snippet.Save(newSnippets); err != nil {
 					m.setStatus(fmt.Sprintf("Save failed: %v", err), true)
 				} else {
+					m.snippets = newSnippets
+					if m.snippetCursor >= len(m.snippets) && m.snippetCursor > 0 {
+						m.snippetCursor--
+					}
 					m.setStatus("Snippet deleted", false)
 				}
 			}
@@ -108,12 +108,15 @@ func (m model) updateSnippetNaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.snippetInput.Blur()
 			return m, nil
 		}
-		m.snippets = append(m.snippets, snippet.Snippet{Name: name, Query: query})
-		if err := snippet.Save(m.snippets); err != nil {
+		newSnippets := append(append([]snippet.Snippet{}, m.snippets...), snippet.Snippet{Name: name, Query: query})
+		if err := snippet.Save(newSnippets); err != nil {
 			m.setStatus(fmt.Sprintf("Save failed: %v", err), true)
-		} else {
-			m.setStatus(fmt.Sprintf("Saved snippet: %s", name), false)
+			m.snippetNaming = false
+			m.snippetInput.Blur()
+			return m, nil
 		}
+		m.snippets = newSnippets
+		m.setStatus(fmt.Sprintf("Saved snippet: %s", name), false)
 		m.snippetNaming = false
 		m.snippetInput.Blur()
 		m.snippetCursor = len(m.snippets) - 1
