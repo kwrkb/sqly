@@ -9,24 +9,43 @@ import (
 )
 
 func (m model) updateSidebar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "t":
+	switch msg.Type {
+	case tea.KeyEsc:
 		m.sidebarOpen = false
 		m.mode = normalMode
 		m.setStatus("Normal mode", false)
 		m.resize()
-	case "j", "down":
+	case tea.KeyRunes:
+		if msg.Alt {
+			break
+		}
+		switch string(msg.Runes) {
+		case "t":
+			m.sidebarOpen = false
+			m.mode = normalMode
+			m.setStatus("Normal mode", false)
+			m.resize()
+		case "j":
+			if len(m.sidebarTables) > 0 {
+				m.sidebarCursor = min(m.sidebarCursor+1, len(m.sidebarTables)-1)
+			}
+		case "k":
+			if m.sidebarCursor > 0 {
+				m.sidebarCursor--
+			}
+		}
+	case tea.KeyDown:
 		if len(m.sidebarTables) > 0 {
 			m.sidebarCursor = min(m.sidebarCursor+1, len(m.sidebarTables)-1)
 		}
-	case "k", "up":
+	case tea.KeyUp:
 		if m.sidebarCursor > 0 {
 			m.sidebarCursor--
 		}
-	case "enter":
+	case tea.KeyEnter:
 		if len(m.sidebarTables) > 0 {
 			name := m.sidebarTables[m.sidebarCursor]
-			quoted := `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+			quoted := m.db.QuoteIdentifier(name)
 			query := fmt.Sprintf("SELECT * FROM %s LIMIT 100;", quoted)
 			m.textarea.SetValue(query)
 			m.sidebarOpen = false

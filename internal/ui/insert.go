@@ -10,14 +10,14 @@ import (
 const maxHistory = 100
 
 func (m model) updateInsert(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
+	switch msg.Type {
+	case tea.KeyEsc:
 		m.mode = normalMode
 		m.textarea.Blur()
 		m.setStatus("Normal mode", false)
 		m.syncViewport()
 		return m, nil
-	case "ctrl+enter", "ctrl+j":
+	case tea.KeyCtrlJ:
 		query := strings.TrimSpace(m.textarea.Value())
 		if m.queryCancel != nil {
 			m.queryCancel()
@@ -35,7 +35,7 @@ func (m model) updateInsert(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.queryCancel = cancel
 		m.setStatus("Executing query...", false)
 		return m, executeQueryCmd(ctx, m.db, query, m.querySeq)
-	case "ctrl+p":
+	case tea.KeyCtrlP:
 		if len(m.queryHistory) == 0 {
 			return m, nil
 		}
@@ -47,7 +47,7 @@ func (m model) updateInsert(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.textarea.SetValue(m.queryHistory[m.historyIdx])
 		return m, nil
-	case "ctrl+n":
+	case tea.KeyCtrlN:
 		if m.historyIdx == -1 {
 			return m, nil
 		}

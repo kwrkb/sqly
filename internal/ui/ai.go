@@ -13,9 +13,11 @@ import (
 	"github.com/kwrkb/asql/internal/db"
 )
 
+const aiRequestTimeout = 30 * time.Second
+
 func (m model) updateAI(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.aiLoading {
-		if msg.String() == "esc" {
+		if msg.Type == tea.KeyEsc {
 			if m.queryCancel != nil {
 				m.queryCancel()
 				m.queryCancel = nil
@@ -27,13 +29,13 @@ func (m model) updateAI(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	switch msg.String() {
-	case "esc":
+	switch msg.Type {
+	case tea.KeyEsc:
 		m.mode = normalMode
 		m.aiError = ""
 		m.setStatus("Normal mode", false)
 		return m, nil
-	case "enter":
+	case tea.KeyEnter:
 		prompt := strings.TrimSpace(m.aiInput.Value())
 		if prompt == "" {
 			return m, nil
@@ -55,7 +57,7 @@ func (m model) updateAI(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func generateSQLCmd(parent context.Context, client *ai.Client, adapter db.DBAdapter, prompt string, seq uint64) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+		ctx, cancel := context.WithTimeout(parent, aiRequestTimeout)
 		defer cancel()
 
 		schema, err := adapter.Schema(ctx)

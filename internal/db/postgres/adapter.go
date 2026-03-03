@@ -34,6 +34,10 @@ func Open(dsn string) (*Adapter, error) {
 
 func (a *Adapter) Type() string { return "postgres" }
 
+func (a *Adapter) QuoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
 func (a *Adapter) Close() error {
 	return a.conn.Close()
 }

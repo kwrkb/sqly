@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -39,10 +40,13 @@ func resolveDSN(args []string, getenv func(string) string) (string, error) {
 	return "", fmt.Errorf("usage: %s <database-path-or-dsn>\n  or set ASQL_DSN / DATABASE_URL environment variable", args[0])
 }
 
+var rePasswordInDSN = regexp.MustCompile(`(://[^:]*:)([^@]*)(@)`)
+
 func maskDSN(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {
-		return dsn
+		// Best-effort: mask password in malformed URLs
+		return rePasswordInDSN.ReplaceAllString(dsn, "${1}***${3}")
 	}
 	masked := false
 	// Mask userinfo password (user:password@host)

@@ -140,6 +140,11 @@ func TestMaskDSN(t *testing.T) {
 			dsn:  "postgres://user:pass@host/db?password=secret",
 			want: "postgres://user:%2A%2A%2A@host/db?password=%2A%2A%2A",
 		},
+		{
+			name: "malformed URL with password best-effort masked",
+			dsn:  "postgres://user:secret@host:5432/db%zz",
+			want: "postgres://user:***@host:5432/db%zz",
+		},
 	}
 
 	for _, tt := range tests {

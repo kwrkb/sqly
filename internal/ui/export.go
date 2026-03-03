@@ -19,20 +19,34 @@ var exportOptions = []string{
 }
 
 func (m model) updateExport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
+	switch msg.Type {
+	case tea.KeyEsc:
 		m.mode = normalMode
 		m.setStatus("Normal mode", false)
 		return m, nil
-	case "j", "down":
+	case tea.KeyRunes:
+		if msg.Alt {
+			break
+		}
+		switch string(msg.Runes) {
+		case "j":
+			if m.exportCursor < len(exportOptions)-1 {
+				m.exportCursor++
+			}
+		case "k":
+			if m.exportCursor > 0 {
+				m.exportCursor--
+			}
+		}
+	case tea.KeyDown:
 		if m.exportCursor < len(exportOptions)-1 {
 			m.exportCursor++
 		}
-	case "k", "up":
+	case tea.KeyUp:
 		if m.exportCursor > 0 {
 			m.exportCursor--
 		}
-	case "enter":
+	case tea.KeyEnter:
 		m.executeExport()
 		return m, nil
 	}

@@ -212,7 +212,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resize()
 		return m, nil
 	case tea.KeyMsg:
-		if msg.String() == "ctrl+c" {
+		if msg.Type == tea.KeyCtrlC {
 			if m.queryCancel != nil {
 				m.queryCancel()
 				m.queryCancel = nil

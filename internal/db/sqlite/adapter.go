@@ -32,6 +32,10 @@ func Open(path string) (*Adapter, error) {
 
 func (a *Adapter) Type() string { return "sqlite" }
 
+func (a *Adapter) QuoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
 func (a *Adapter) Close() error {
 	return a.conn.Close()
 }

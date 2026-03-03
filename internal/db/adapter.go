@@ -14,5 +14,6 @@ type DBAdapter interface {
 	Query(context.Context, string) (QueryResult, error)
 	Tables(context.Context) ([]string, error)
 	Schema(context.Context) (string, error)
+	QuoteIdentifier(name string) string
 	Close() error
 }
