@@ -60,12 +60,13 @@ func (m model) renderWithDetailOverlay(background string) string {
 	}
 	modalHeight := m.height - 6
 
+	tableRows := m.table.Rows()
 	rowIdx := m.table.Cursor()
-	totalRows := len(m.lastResult.Rows)
+	totalRows := len(tableRows)
 	if rowIdx < 0 || rowIdx >= totalRows {
 		return background
 	}
-	row := m.lastResult.Rows[rowIdx]
+	row := tableRows[rowIdx]
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).

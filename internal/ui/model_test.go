@@ -2,6 +2,7 @@ package ui
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -353,5 +354,40 @@ func TestDetailMode_FieldNavigation(t *testing.T) {
 	rm = result.(model)
 	if rm.detailFieldCursor != 0 {
 		t.Errorf("expected cursor=0 at boundary, got %d", rm.detailFieldCursor)
+	}
+}
+
+func TestDetailMode_ShowsSortedRow(t *testing.T) {
+	m := newTestModel()
+	m.lastResult = db.QueryResult{
+		Columns: []string{"id", "name"},
+		Rows:    [][]string{{"2", "bob"}, {"1", "alice"}},
+		Message: "2 row(s) returned",
+	}
+	m.applyResult(m.lastResult)
+
+	// Sort by column 0 ascending: alice(1) should come first
+	m.colCursor = 0
+	m.sortCol = 0
+	m.sortDir = sortAsc
+	m.applySortedResult()
+
+	// First row in sorted table should be "1", "alice"
+	rows := m.table.Rows()
+	if rows[0][0] != "1" || rows[0][1] != "alice" {
+		t.Fatalf("expected sorted first row [1, alice], got %v", rows[0])
+	}
+
+	// Enter detail mode on sorted first row
+	m.mode = detailMode
+	m.detailFieldCursor = 0
+	m.detailScroll = 0
+	m.width = 80
+	m.height = 24
+
+	// renderWithDetailOverlay should show the sorted row, not original
+	view := m.renderWithDetailOverlay("background")
+	if !strings.Contains(view, "alice") {
+		t.Errorf("expected detail view to show 'alice' (sorted first row), got:\n%s", view)
 	}
 }
