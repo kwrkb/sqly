@@ -93,7 +93,7 @@ func (m model) renderWithDetailOverlay(background string) string {
 
 	// Calculate scroll offset so cursor stays visible
 	contentHeight := max(modalHeight-3, 1) // title + margins
-	linesPerField := 2                     // label line + value line
+	linesPerField := 3                     // label line + value line + separator
 	maxVisibleFields := max(contentHeight/linesPerField, 1)
 	if m.detailFieldCursor >= m.detailScroll+maxVisibleFields {
 		m.detailScroll = m.detailFieldCursor - maxVisibleFields + 1
