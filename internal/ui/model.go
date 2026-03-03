@@ -17,6 +17,7 @@ import (
 
 	"github.com/kwrkb/asql/internal/ai"
 	"github.com/kwrkb/asql/internal/db"
+	"github.com/kwrkb/asql/internal/db/dbutil"
 )
 
 type mode string
@@ -45,6 +46,8 @@ const (
 	errorColor       lipgloss.Color = "#F87171"
 	keywordColor     lipgloss.Color = "#F59E0B"
 )
+
+var typeStyle = lipgloss.NewStyle().Foreground(mutedTextColor)
 
 type queryExecutedMsg struct {
 	seq    uint64
@@ -412,7 +415,8 @@ func (m *model) updateColumnHeaders() {
 	for i, title := range m.lastResult.Columns {
 		header := sanitize(title)
 		if i < len(m.lastResult.ColumnTypes) && m.lastResult.ColumnTypes[i] != "" {
-			header = fmt.Sprintf("%s %s", header, strings.ToLower(sanitize(m.lastResult.ColumnTypes[i])))
+			shortType := dbutil.ShortenTypeName(sanitize(m.lastResult.ColumnTypes[i]))
+			header = header + " " + typeStyle.Render(shortType)
 		}
 		if i == m.sortCol && m.sortDir != sortNone {
 			header += sortIndicator(m.sortDir)
@@ -608,7 +612,8 @@ func (m *model) applyResultWithSort(result db.QueryResult) {
 		for i, title := range result.Columns {
 			header := sanitize(title)
 			if i < len(result.ColumnTypes) && result.ColumnTypes[i] != "" {
-				header = fmt.Sprintf("%s %s", header, strings.ToLower(sanitize(result.ColumnTypes[i])))
+				shortType := dbutil.ShortenTypeName(sanitize(result.ColumnTypes[i]))
+				header = header + " " + typeStyle.Render(shortType)
 			}
 			if i == m.sortCol && m.sortDir != sortNone {
 				header += sortIndicator(m.sortDir)

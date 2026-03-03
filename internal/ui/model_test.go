@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/kwrkb/asql/internal/db"
 )
+
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestColumnWidth(t *testing.T) {
 	tests := []struct {
@@ -159,11 +162,13 @@ func TestApplyResult(t *testing.T) {
 		m.applyResult(result)
 
 		cols := m.table.Columns()
-		if cols[0].Title != "id integer" {
-			t.Errorf("expected 'id integer', got %q", cols[0].Title)
+		got0 := ansiRe.ReplaceAllString(cols[0].Title, "")
+		got1 := ansiRe.ReplaceAllString(cols[1].Title, "")
+		if got0 != "id int" {
+			t.Errorf("expected 'id int', got %q", got0)
 		}
-		if cols[1].Title != "name text" {
-			t.Errorf("expected 'name text', got %q", cols[1].Title)
+		if got1 != "name text" {
+			t.Errorf("expected 'name text', got %q", got1)
 		}
 	})
 
