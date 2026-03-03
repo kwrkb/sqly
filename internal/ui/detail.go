@@ -14,7 +14,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	numFields := len(m.lastResult.Columns)
 
 	switch msg.Type {
-	case tea.KeyEsc:
+	case tea.KeyEsc, tea.KeyEnter:
 		m.mode = normalMode
 		m.setStatus("Normal mode", false)
 	case tea.KeyDown:
@@ -30,6 +30,9 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			break
 		}
 		switch string(msg.Runes) {
+		case "q":
+			m.mode = normalMode
+			m.setStatus("Normal mode", false)
 		case "j":
 			if m.detailFieldCursor < numFields-1 {
 				m.detailFieldCursor++
@@ -109,15 +112,15 @@ func (m model) renderWithDetailOverlay(background string) string {
 			break
 		}
 
-		colName := m.lastResult.Columns[i]
+		colName := sanitize(m.lastResult.Columns[i])
 		colType := ""
 		if i < len(m.lastResult.ColumnTypes) && m.lastResult.ColumnTypes[i] != "" {
-			colType = " " + dbutil.ShortenTypeName(m.lastResult.ColumnTypes[i])
+			colType = " " + dbutil.ShortenTypeName(sanitize(m.lastResult.ColumnTypes[i]))
 		}
 
 		val := ""
 		if i < len(row) {
-			val = row[i]
+			val = sanitize(row[i])
 		}
 
 		if i == m.detailFieldCursor {

@@ -525,7 +525,7 @@ func (m model) renderStatusBar() string {
 		case exportMode:
 			hints = "j/k:nav Enter:select Esc:cancel"
 		case detailMode:
-			hints = "j/k:field n/N:row Esc:close"
+			hints = "j/k:field n/N:row q/Esc:close"
 		}
 	}
 	hintStyle := lipgloss.NewStyle().Foreground(mutedTextColor).Background(statusBackground).Padding(0, 1)
