@@ -111,6 +111,11 @@ type model struct {
 	historySearchInput   textinput.Model
 	historySearchResults []int // indices into queryHistory (filtered)
 	historySearchCursor  int
+	completionActive     bool
+	completionItems      []string
+	completionCursor     int
+	completionPrefix     string
+	completionColCache   map[string][]string
 	modeStyle            lipgloss.Style
 	messageStyle         lipgloss.Style
 	pathStyle            lipgloss.Style
@@ -301,6 +306,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tablesLoadedMsg:
 		if msg.err == nil {
 			m.sidebarTables = msg.tables
+			m.completionColCache = nil // invalidate column cache
 			if m.sidebarCursor >= len(msg.tables) {
 				m.sidebarCursor = max(len(msg.tables)-1, 0)
 			}
@@ -352,11 +358,17 @@ func (m model) View() string {
 
 	contentWidth := m.contentWidth()
 
+	editorView := m.textarea.View()
+	if m.completionActive && len(m.completionItems) > 0 {
+		popup := m.renderCompletionPopup()
+		editorView = editorView + "\n" + popup
+	}
+
 	editor := lipgloss.NewStyle().
 		Width(contentWidth).
 		Height(m.editorHeight()).
 		Background(appBackground).
-		Render(m.textarea.View())
+		Render(editorView)
 
 	results := lipgloss.NewStyle().
 		Width(contentWidth).
@@ -555,7 +567,11 @@ func (m model) renderStatusBar() string {
 				hints = "h/l:col s:sort t:tables i:insert e:export S:snippets q:quit"
 			}
 		case insertMode:
-			hints = "C-Enter/C-j:exec C-r:search C-l:clear C-p/C-n:hist C-s:save Esc:normal"
+			if m.completionActive {
+				hints = "Tab/C-n:next C-p:prev Enter:accept Esc:cancel"
+			} else {
+				hints = "Tab:complete C-Enter/C-j:exec C-r:search C-l:clear C-p/C-n:hist C-s:save Esc:normal"
+			}
 		case sidebarMode:
 			hints = "j/k:nav Enter:select Esc:close"
 		case aiMode:

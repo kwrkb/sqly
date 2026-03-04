@@ -13,6 +13,7 @@ type DBAdapter interface {
 	Type() string
 	Query(context.Context, string) (QueryResult, error)
 	Tables(context.Context) ([]string, error)
+	Columns(ctx context.Context, tableName string) ([]string, error)
 	Schema(context.Context) (string, error)
 	QuoteIdentifier(name string) string
 	Close() error

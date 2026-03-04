@@ -58,6 +58,28 @@ func (a *Adapter) Tables(ctx context.Context) ([]string, error) {
 	return tables, rows.Err()
 }
 
+func (a *Adapter) Columns(ctx context.Context, tableName string) ([]string, error) {
+	quoted := `"` + strings.ReplaceAll(tableName, `"`, `""`) + `"`
+	rows, err := a.conn.QueryContext(ctx, "PRAGMA table_info("+quoted+")")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cols []string
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue *string
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return nil, err
+		}
+		cols = append(cols, name)
+	}
+	return cols, rows.Err()
+}
+
 func (a *Adapter) Schema(ctx context.Context) (string, error) {
 	rows, err := a.conn.QueryContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL ORDER BY name")
 	if err != nil {

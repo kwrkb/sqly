@@ -63,6 +63,27 @@ func (a *Adapter) Tables(ctx context.Context) ([]string, error) {
 	return tables, rows.Err()
 }
 
+func (a *Adapter) Columns(ctx context.Context, tableName string) ([]string, error) {
+	quoted := "`" + strings.ReplaceAll(tableName, "`", "``") + "`"
+	rows, err := a.conn.QueryContext(ctx, "SHOW COLUMNS FROM "+quoted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cols []string
+	for rows.Next() {
+		var field, colType, null, key string
+		var dflt *string
+		var extra string
+		if err := rows.Scan(&field, &colType, &null, &key, &dflt, &extra); err != nil {
+			return nil, err
+		}
+		cols = append(cols, field)
+	}
+	return cols, rows.Err()
+}
+
 func (a *Adapter) Schema(ctx context.Context) (string, error) {
 	tables, err := a.Tables(ctx)
 	if err != nil {

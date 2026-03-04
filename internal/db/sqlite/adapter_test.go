@@ -157,6 +157,47 @@ func TestTables(t *testing.T) {
 	})
 }
 
+func TestColumns(t *testing.T) {
+	ctx := context.Background()
+
+	setup := func(t *testing.T) *Adapter {
+		t.Helper()
+		a, err := Open(":memory:")
+		if err != nil {
+			t.Fatalf("Open failed: %v", err)
+		}
+		t.Cleanup(func() { a.Close() })
+		return a
+	}
+
+	t.Run("returns column names", func(t *testing.T) {
+		a := setup(t)
+		a.conn.ExecContext(ctx, "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
+
+		cols, err := a.Columns(ctx, "users")
+		if err != nil {
+			t.Fatalf("Columns() failed: %v", err)
+		}
+		if len(cols) != 3 {
+			t.Fatalf("expected 3 columns, got %d: %v", len(cols), cols)
+		}
+		if cols[0] != "id" || cols[1] != "name" || cols[2] != "email" {
+			t.Errorf("expected [id name email], got %v", cols)
+		}
+	})
+
+	t.Run("nonexistent table returns empty", func(t *testing.T) {
+		a := setup(t)
+		cols, err := a.Columns(ctx, "nonexistent")
+		if err != nil {
+			t.Fatalf("Columns() failed: %v", err)
+		}
+		if len(cols) != 0 {
+			t.Errorf("expected 0 columns, got %d: %v", len(cols), cols)
+		}
+	})
+}
+
 func TestSchema(t *testing.T) {
 	ctx := context.Background()
 
