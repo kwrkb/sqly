@@ -48,7 +48,7 @@ func (m model) updateAI(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.queryCancel = cancel
 		m.aiLoading = true
 		m.aiError = ""
-		return m, tea.Batch(m.aiSpinner.Tick, generateSQLCmd(ctx, m.aiClient, m.db, prompt, m.querySeq))
+		return m, tea.Batch(m.aiSpinner.Tick, generateSQLCmd(ctx, m.aiClient, m.activeDB(), prompt, m.querySeq))
 	}
 	var cmd tea.Cmd
 	m.aiInput, cmd = m.aiInput.Update(msg)

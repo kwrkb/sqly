@@ -72,8 +72,13 @@ type aiResponseMsg struct {
 	err error
 }
 
+type connSwitchedMsg struct {
+	err error
+}
+
 type model struct {
-	db           db.DBAdapter
+	connMgr      *connManager
+	connName     string // display name of initial connection
 	dbPath       string
 	mode         mode
 	textarea     textarea.Model
@@ -133,21 +138,11 @@ type model struct {
 	pathStyle            lipgloss.Style
 }
 
-func NewModel(adapter db.DBAdapter, dbPath string, rawDSN string, aiClient *ai.Client, snippets []snippet.Snippet, profiles []profile.Profile) tea.Model {
+func NewModel(adapter db.DBAdapter, dbPath string, rawDSN string, connName string, aiClient *ai.Client, snippets []snippet.Snippet, profiles []profile.Profile) tea.Model {
 	input := textarea.New()
 
-	var placeholder, initialQuery string
-	switch adapter.Type() {
-	case "mysql":
-		placeholder = "SHOW TABLES;"
-		initialQuery = "SELECT VERSION();"
-	case "postgres":
-		placeholder = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';"
-		initialQuery = "SELECT version();"
-	default:
-		placeholder = "SELECT name FROM sqlite_master WHERE type = 'table';"
-		initialQuery = "SELECT sqlite_version();"
-	}
+	placeholder := db.Placeholder(adapter.Type())
+	initialQuery := db.InitialQuery(adapter.Type())
 
 	input.Placeholder = placeholder
 	input.Prompt = lipgloss.NewStyle().Foreground(keywordColor).Render("sql> ")
@@ -220,8 +215,11 @@ func NewModel(adapter db.DBAdapter, dbPath string, rawDSN string, aiClient *ai.C
 	histSearchIn.CharLimit = 200
 	histSearchIn.Width = 40
 
+	cm := newConnManager(connName, rawDSN, adapter)
+
 	m := model{
-		db:           adapter,
+		connMgr:      cm,
+		connName:     connName,
 		dbPath:       dbPath,
 		mode:         insertMode,
 		textarea:     input,
@@ -247,8 +245,12 @@ func NewModel(adapter db.DBAdapter, dbPath string, rawDSN string, aiClient *ai.C
 	return m
 }
 
+func (m *model) activeDB() db.DBAdapter {
+	return m.connMgr.Active()
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, loadTablesCmd(m.db))
+	return tea.Batch(textarea.Blink, loadTablesCmd(m.connMgr.Active()))
 }
 
 func loadTablesCmd(adapter db.DBAdapter) tea.Cmd {
@@ -325,6 +327,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case connSwitchedMsg:
+		if msg.err != nil {
+			m.setStatus(fmt.Sprintf("Connection failed: %v", msg.err), true)
+			m.mode = normalMode
+			m.textarea.Blur()
+			return m, nil
+		}
+		// Update dbPath to reflect new connection
+		m.dbPath = db.MaskDSN(m.connMgr.ActiveDSN())
+		m.rawDSN = m.connMgr.ActiveDSN()
+		m.completionColCache = nil
+		m.sidebarTables = nil
+		m.setStatus(fmt.Sprintf("Connected to %s", m.connMgr.ActiveName()), false)
+		m.mode = normalMode
+		m.textarea.Blur()
+		return m, loadTablesCmd(m.connMgr.Active())
 	case tablesLoadedMsg:
 		if msg.err == nil {
 			m.sidebarTables = msg.tables
@@ -356,7 +374,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.colCursor = 0
 		m.colOffset = 0
 		m.applyResult(msg.result)
-		return m, loadTablesCmd(m.db)
+		return m, loadTablesCmd(m.activeDB())
 	}
 
 	var cmd tea.Cmd
@@ -692,13 +710,14 @@ func (m model) renderStatusBar() string {
 			if m.profileNaming {
 				hints = "Enter:save Esc:cancel"
 			} else {
-				hints = "j/k:nav Enter:copy d:del a:add Esc:close"
+				hints = "j/k:nav Enter:connect d:del a:add Esc:close"
 			}
 		}
 	}
 	hintStyle := lipgloss.NewStyle().Foreground(mutedTextColor).Background(statusBackground).Padding(0, 1)
 
-	dbLabel := strings.ToUpper(m.db.Type())
+	dbLabel := strings.ToUpper(m.activeDB().Type())
+	connName := m.connMgr.ActiveName()
 	dbLabelStyle := lipgloss.NewStyle().Padding(0, 1).Foreground(keywordColor).Background(statusBackground)
 
 	var posInfo string
@@ -719,7 +738,13 @@ func (m model) renderStatusBar() string {
 	posStyle := lipgloss.NewStyle().Foreground(textColor).Background(statusBackground).Padding(0, 1)
 
 	left := modeStr
-	center := dbLabelStyle.Render("["+dbLabel+"]") + m.pathStyle.Render(m.dbPath)
+	var dbTag string
+	if connName != "" {
+		dbTag = connName + ":" + dbLabel
+	} else {
+		dbTag = dbLabel
+	}
+	center := dbLabelStyle.Render("["+dbTag+"]") + m.pathStyle.Render(m.dbPath)
 	middle := msgStyle.Render(m.statusText)
 	pos := posStyle.Render(posInfo)
 	right := hintStyle.Render(hints)

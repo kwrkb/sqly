@@ -153,7 +153,6 @@ func main() {
 	displayDSN := MaskDSN(dbPath)
 
 	var adapter dbpkg.DBAdapter
-
 	switch {
 	case strings.HasPrefix(dbPath, "mysql://"):
 		adapter, err = mysql.Open(dbPath)
@@ -167,6 +166,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer adapter.Close()
+
+	// Determine connection name from profile or DSN
+	connName := dbpkg.DisplayName(dbPath)
+	for _, p := range profiles {
+		if p.DSN == dbPath {
+			connName = p.Name
+			break
+		}
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -184,7 +192,7 @@ func main() {
 	}
 
 	program := tea.NewProgram(
-		ui.NewModel(adapter, displayDSN, dbPath, aiClient, snippets, profiles),
+		ui.NewModel(adapter, displayDSN, dbPath, connName, aiClient, snippets, profiles),
 		tea.WithAltScreen(),
 	)
 
