@@ -92,14 +92,7 @@ func (m model) updateProfileNaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if name == "" {
 			return m, nil
 		}
-		// Remove existing profile with same name
-		var newProfiles []profile.Profile
-		for _, p := range m.profiles {
-			if p.Name != name {
-				newProfiles = append(newProfiles, p)
-			}
-		}
-		newProfiles = append(newProfiles, profile.Profile{Name: name, DSN: m.rawDSN})
+		newProfiles := profile.Upsert(m.profiles, profile.Profile{Name: name, DSN: m.rawDSN})
 		if err := profile.Save(newProfiles); err != nil {
 			m.setStatus(fmt.Sprintf("Save failed: %v", err), true)
 			m.profileNaming = false
@@ -206,7 +199,7 @@ func (m model) renderWithProfileOverlay(background string) string {
 				items.WriteString(itemStyle.Render(label))
 			}
 			// Show masked DSN preview
-			preview := maskDSNForUI(p.DSN)
+			preview := sanitize(maskDSNForUI(p.DSN))
 			maxPreview := modalWidth - 10
 			runes := []rune(preview)
 			if maxPreview > 0 && len(runes) > maxPreview {

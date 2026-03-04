@@ -190,6 +190,7 @@ func TestParseSaveProfile(t *testing.T) {
 		args     []string
 		wantName string
 		wantArgs []string
+		wantErr  bool
 	}{
 		{
 			name:     "no flag",
@@ -203,11 +204,25 @@ func TestParseSaveProfile(t *testing.T) {
 			wantName: "mydb",
 			wantArgs: []string{"asql", "test.db"},
 		},
+		{
+			name:    "missing name",
+			args:    []string{"asql", "--save-profile"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			name, args := parseSaveProfile(tt.args)
+			name, args, err := parseSaveProfile(tt.args)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if name != tt.wantName {
 				t.Errorf("name = %q, want %q", name, tt.wantName)
 			}

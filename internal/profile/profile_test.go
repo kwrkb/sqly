@@ -75,6 +75,31 @@ func TestFind(t *testing.T) {
 	}
 }
 
+func TestUpsert(t *testing.T) {
+	profiles := []Profile{
+		{Name: "a", DSN: "a.db"},
+		{Name: "b", DSN: "b.db"},
+	}
+
+	// Add new
+	result := Upsert(profiles, Profile{Name: "c", DSN: "c.db"})
+	if len(result) != 3 {
+		t.Fatalf("Upsert add: got %d, want 3", len(result))
+	}
+	if result[2].Name != "c" {
+		t.Errorf("Upsert add: last = %q, want c", result[2].Name)
+	}
+
+	// Replace existing
+	result = Upsert(profiles, Profile{Name: "a", DSN: "new-a.db"})
+	if len(result) != 2 {
+		t.Fatalf("Upsert replace: got %d, want 2", len(result))
+	}
+	if result[1].DSN != "new-a.db" {
+		t.Errorf("Upsert replace: DSN = %q, want new-a.db", result[1].DSN)
+	}
+}
+
 func TestLoadEmptyFile(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmp)

@@ -28,18 +28,21 @@ var (
 
 // parseSaveProfile extracts --save-profile <name> from args and returns
 // the profile name and the remaining args.
-func parseSaveProfile(args []string) (string, []string) {
+func parseSaveProfile(args []string) (string, []string, error) {
 	var remaining []string
 	var profileName string
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--save-profile" && i+1 < len(args) {
+		if args[i] == "--save-profile" {
+			if i+1 >= len(args) {
+				return "", nil, fmt.Errorf("--save-profile requires a name argument")
+			}
 			profileName = args[i+1]
 			i++ // skip value
 		} else {
 			remaining = append(remaining, args[i])
 		}
 	}
-	return profileName, remaining
+	return profileName, remaining, nil
 }
 
 func resolveDSN(args []string, getenv func(string) string, profiles []profile.Profile) (string, error) {
@@ -118,7 +121,11 @@ func MaskDSN(dsn string) string {
 }
 
 func main() {
-	saveProfileName, args := parseSaveProfile(os.Args)
+	saveProfileName, args, parseErr := parseSaveProfile(os.Args)
+	if parseErr != nil {
+		fmt.Fprintln(os.Stderr, parseErr)
+		os.Exit(1)
+	}
 
 	profiles, profileErr := profile.Load()
 	if profileErr != nil {
@@ -133,14 +140,7 @@ func main() {
 
 	// --save-profile: save current DSN and continue
 	if saveProfileName != "" {
-		// Remove existing profile with same name
-		var newProfiles []profile.Profile
-		for _, p := range profiles {
-			if p.Name != saveProfileName {
-				newProfiles = append(newProfiles, p)
-			}
-		}
-		newProfiles = append(newProfiles, profile.Profile{Name: saveProfileName, DSN: dbPath})
+		newProfiles := profile.Upsert(profiles, profile.Profile{Name: saveProfileName, DSN: dbPath})
 		if err := profile.Save(newProfiles); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to save profile: %v\n", err)
 			os.Exit(1)

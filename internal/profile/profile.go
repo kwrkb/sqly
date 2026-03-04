@@ -74,6 +74,17 @@ func Save(profiles []Profile) error {
 	return nil
 }
 
+// Upsert adds or replaces a profile in a slice of profiles.
+func Upsert(profiles []Profile, p Profile) []Profile {
+	var result []Profile
+	for _, existing := range profiles {
+		if existing.Name != p.Name {
+			result = append(result, existing)
+		}
+	}
+	return append(result, p)
+}
+
 // Find returns the profile with the given name, or nil if not found.
 func Find(profiles []Profile, name string) *Profile {
 	for i := range profiles {
