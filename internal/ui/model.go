@@ -98,8 +98,10 @@ type model struct {
 	historyDraft  string   // input saved before navigating history
 	sortCol       int
 	sortDir       sortOrder
-	colCursor      int // column cursor in NORMAL mode
-	cachedColWidths []int // cached column widths (recomputed only when result changes)
+	colCursor       int           // column cursor in NORMAL mode
+	colOffset       int           // first visible column index for horizontal windowing
+	cachedColWidths []int         // cached column widths (recomputed only when result changes)
+	displayRows     []table.Row   // sorted rows for windowing source
 	exportCursor      int
 	detailFieldCursor int
 	detailScroll      int
@@ -332,6 +334,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sortDir = sortNone
 		m.sortCol = 0
 		m.colCursor = 0
+		m.colOffset = 0
 		m.applyResult(msg.result)
 		return m, loadTablesCmd(m.db)
 	}
@@ -450,29 +453,62 @@ func (m *model) resultsHeight() int {
 	return max(available-m.editorHeight(), 4)
 }
 
-func (m *model) syncViewport() {
-	m.updateColumnHeaders()
-	panel := lipgloss.NewStyle().
-		Width(max(m.contentWidth(), 0)).
-		Height(max(m.resultsHeight(), 0)).
-		Background(panelBackground).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(panelBorder).
-		Padding(0, 1).
-		Render(m.table.View())
-	m.viewport.SetContent(panel)
+// adjustColOffset ensures colCursor is within the visible column window.
+func (m *model) adjustColOffset() {
+	if m.colCursor < m.colOffset {
+		m.colOffset = m.colCursor
+	}
+	_, visEnd := m.visibleColumnRange()
+	for m.colCursor >= visEnd && m.colOffset < len(m.cachedColWidths)-1 {
+		m.colOffset++
+		_, visEnd = m.visibleColumnRange()
+	}
 }
 
-// updateColumnHeaders rebuilds column headers to highlight the selected column.
-// Column widths are taken from cache (computed once per result set in applyResultWithSort).
-func (m *model) updateColumnHeaders() {
-	if len(m.lastResult.Columns) == 0 {
+// visibleColumnRange returns the range [start, end) of columns that fit within
+// the available content width, starting from colOffset.
+func (m *model) visibleColumnRange() (int, int) {
+	if len(m.cachedColWidths) == 0 {
+		return 0, 0
+	}
+	available := m.contentWidth() - 8 // border(2) + padding(2) + margin
+	start := m.colOffset
+	if start >= len(m.cachedColWidths) {
+		start = 0
+	}
+	sum := 0
+	for i := start; i < len(m.cachedColWidths); i++ {
+		w := m.cachedColWidths[i] + 2 // column width + cell gap
+		if sum+w > available && i > start {
+			return start, i
+		}
+		sum += w
+	}
+	return start, len(m.cachedColWidths)
+}
+
+func (m *model) syncViewport() {
+	if len(m.lastResult.Columns) == 0 || len(m.cachedColWidths) == 0 {
+		// No windowing needed for message-only results
+		panel := lipgloss.NewStyle().
+			Width(max(m.contentWidth(), 0)).
+			Height(max(m.resultsHeight(), 0)).
+			Background(panelBackground).
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(panelBorder).
+			Padding(0, 1).
+			Render(m.table.View())
+		m.viewport.SetContent(panel)
 		return
 	}
-	columns := make([]table.Column, 0, len(m.lastResult.Columns))
+
+	visStart, visEnd := m.visibleColumnRange()
+
+	// Build windowed columns
 	selectedStyle := lipgloss.NewStyle().Reverse(true)
-	for i, title := range m.lastResult.Columns {
-		header := sanitize(title)
+	columns := make([]table.Column, 0, visEnd-visStart)
+	for i := visStart; i < visEnd; i++ {
+		header := sanitize(m.lastResult.Columns[i])
 		if i < len(m.lastResult.ColumnTypes) && m.lastResult.ColumnTypes[i] != "" {
 			shortType := dbutil.ShortenTypeName(sanitize(m.lastResult.ColumnTypes[i]))
 			header = header + " " + typeStyle.Render(shortType)
@@ -483,13 +519,39 @@ func (m *model) updateColumnHeaders() {
 		if m.mode == normalMode && i == m.colCursor {
 			header = selectedStyle.Render(header)
 		}
-		w := 12
-		if i < len(m.cachedColWidths) {
-			w = m.cachedColWidths[i]
-		}
-		columns = append(columns, table.Column{Title: header, Width: w})
+		columns = append(columns, table.Column{Title: header, Width: m.cachedColWidths[i]})
 	}
+
+	// Build windowed rows
+	rows := make([]table.Row, 0, len(m.displayRows))
+	for _, row := range m.displayRows {
+		windowed := make(table.Row, 0, visEnd-visStart)
+		for i := visStart; i < visEnd; i++ {
+			if i < len(row) {
+				windowed = append(windowed, row[i])
+			} else {
+				windowed = append(windowed, "")
+			}
+		}
+		rows = append(rows, windowed)
+	}
+
+	// Preserve table cursor position across column changes
+	cursor := m.table.Cursor()
+	m.table.SetRows([]table.Row{})
 	m.table.SetColumns(columns)
+	m.table.SetRows(rows)
+	m.table.SetCursor(cursor)
+
+	panel := lipgloss.NewStyle().
+		Width(max(m.contentWidth(), 0)).
+		Height(max(m.resultsHeight(), 0)).
+		Background(panelBackground).
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(panelBorder).
+		Padding(0, 1).
+		Render(m.table.View())
+	m.viewport.SetContent(panel)
 }
 
 // sanitize strips ANSI escape sequences and control characters from s.
@@ -533,6 +595,7 @@ func sanitize(s string) string {
 }
 
 func (m *model) applyResult(result db.QueryResult) {
+	m.lastResult = result
 	m.applyResultWithSort(result)
 }
 
@@ -601,7 +664,14 @@ func (m model) renderStatusBar() string {
 		if m.colCursor < len(m.lastResult.Columns) {
 			colName = m.lastResult.Columns[m.colCursor]
 		}
-		posInfo = fmt.Sprintf("col:%s %d/%d", colName, m.table.Cursor()+1, len(m.lastResult.Rows))
+		_, visEnd := m.visibleColumnRange()
+		visCount := visEnd - m.colOffset
+		totalCols := len(m.lastResult.Columns)
+		if visCount < totalCols {
+			posInfo = fmt.Sprintf("col:%s [%d/%d] %d/%d", colName, m.colCursor+1, totalCols, m.table.Cursor()+1, len(m.lastResult.Rows))
+		} else {
+			posInfo = fmt.Sprintf("col:%s %d/%d", colName, m.table.Cursor()+1, len(m.lastResult.Rows))
+		}
 	}
 	posStyle := lipgloss.NewStyle().Foreground(textColor).Background(statusBackground).Padding(0, 1)
 
@@ -671,43 +741,52 @@ func (m *model) applySortedResult() {
 	m.table.GotoTop()
 }
 
-// applyResultWithSort is like applyResult but adds sort indicators to headers.
+// applyResultWithSort computes column widths, saves displayRows, and delegates rendering to syncViewport.
 func (m *model) applyResultWithSort(result db.QueryResult) {
-	columns := make([]table.Column, 0, len(result.Columns))
-	rows := make([]table.Row, 0, len(result.Rows))
-
 	if len(result.Columns) == 0 {
-		columns = []table.Column{{Title: "Result", Width: max(m.width-6, 20)}}
-		rows = []table.Row{{result.Message}}
+		// Message-only result: set directly without windowing
 		m.cachedColWidths = nil
-	} else {
-		m.cachedColWidths = make([]int, len(result.Columns))
-		for i, title := range result.Columns {
-			header := sanitize(title)
-			if i < len(result.ColumnTypes) && result.ColumnTypes[i] != "" {
-				shortType := dbutil.ShortenTypeName(sanitize(result.ColumnTypes[i]))
-				header = header + " " + typeStyle.Render(shortType)
-			}
-			if i == m.sortCol && m.sortDir != sortNone {
-				header += sortIndicator(m.sortDir)
-			}
-			width := columnWidth(header, result.Rows, i)
-			m.cachedColWidths[i] = width
-			columns = append(columns, table.Column{Title: header, Width: width})
-		}
-		for _, row := range result.Rows {
-			rows = append(rows, table.Row(row))
-		}
-		if len(rows) == 0 {
-			sentinel := make(table.Row, len(columns))
-			sentinel[0] = "(no rows)"
-			rows = []table.Row{sentinel}
-		}
+		m.displayRows = nil
+		columns := []table.Column{{Title: "Result", Width: max(m.width-6, 20)}}
+		rows := []table.Row{{result.Message}}
+		m.table.SetRows([]table.Row{})
+		m.table.SetColumns(columns)
+		m.table.SetRows(rows)
+		m.setStatus(result.Message, false)
+		m.syncViewport()
+		return
 	}
 
-	m.table.SetRows([]table.Row{})
-	m.table.SetColumns(columns)
-	m.table.SetRows(rows)
+	// Compute column widths
+	m.cachedColWidths = make([]int, len(result.Columns))
+	for i, title := range result.Columns {
+		header := sanitize(title)
+		if i < len(result.ColumnTypes) && result.ColumnTypes[i] != "" {
+			shortType := dbutil.ShortenTypeName(sanitize(result.ColumnTypes[i]))
+			header = header + " " + typeStyle.Render(shortType)
+		}
+		if i == m.sortCol && m.sortDir != sortNone {
+			header += sortIndicator(m.sortDir)
+		}
+		m.cachedColWidths[i] = columnWidth(header, result.Rows, i)
+	}
+
+	// Save displayRows for windowing
+	m.displayRows = make([]table.Row, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		m.displayRows = append(m.displayRows, table.Row(row))
+	}
+	if len(m.displayRows) == 0 {
+		sentinel := make(table.Row, len(result.Columns))
+		sentinel[0] = "(no rows)"
+		m.displayRows = []table.Row{sentinel}
+	}
+
+	// Reset colOffset if it exceeds new column count
+	if m.colOffset >= len(result.Columns) {
+		m.colOffset = 0
+	}
+
 	m.setStatus(result.Message, false)
 	m.syncViewport()
 }
