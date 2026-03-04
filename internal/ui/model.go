@@ -139,7 +139,15 @@ type model struct {
 	pathStyle            lipgloss.Style
 }
 
-func NewModel(adapter db.DBAdapter, dbPath string, rawDSN string, connName string, aiClient *ai.Client, snippets []snippet.Snippet, profiles []profile.Profile) tea.Model {
+// CloseAll closes all database connections managed by this model.
+// Call this after tea.Program exits to avoid connection leaks.
+func (m model) CloseAll() {
+	if m.connMgr != nil {
+		m.connMgr.CloseAll()
+	}
+}
+
+func NewModel(adapter db.DBAdapter, dbPath string, rawDSN string, connName string, aiClient *ai.Client, snippets []snippet.Snippet, profiles []profile.Profile) model {
 	input := textarea.New()
 
 	placeholder := db.Placeholder(adapter.Type())
@@ -732,8 +740,8 @@ func (m model) renderStatusBar() string {
 	}
 	hintStyle := lipgloss.NewStyle().Foreground(mutedTextColor).Background(statusBackground).Padding(0, 1)
 
-	dbLabel := strings.ToUpper(m.activeDB().Type())
-	connName := m.connMgr.ActiveName()
+	dbLabel := strings.ToUpper(sanitize(m.activeDB().Type()))
+	connName := sanitize(m.connMgr.ActiveName())
 	dbLabelStyle := lipgloss.NewStyle().Padding(0, 1).Foreground(keywordColor).Background(statusBackground)
 
 	var posInfo string
@@ -761,7 +769,7 @@ func (m model) renderStatusBar() string {
 		dbTag = dbLabel
 	}
 	center := dbLabelStyle.Render("["+dbTag+"]") + m.pathStyle.Render(m.dbPath)
-	middle := msgStyle.Render(m.statusText)
+	middle := msgStyle.Render(sanitize(m.statusText))
 	pos := posStyle.Render(posInfo)
 	right := hintStyle.Render(hints)
 

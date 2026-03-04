@@ -38,7 +38,7 @@ func (m model) updateProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.profileCursor--
 			}
 		case "d":
-			if len(m.profiles) > 0 {
+			if len(m.profiles) > 0 && m.profileCursor < len(m.profiles) {
 				newProfiles := append(m.profiles[:m.profileCursor], m.profiles[m.profileCursor+1:]...)
 				if err := profile.Save(newProfiles); err != nil {
 					m.setStatus(fmt.Sprintf("Save failed: %v", err), true)
@@ -51,7 +51,7 @@ func (m model) updateProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "x":
-			if len(m.profiles) > 0 {
+			if len(m.profiles) > 0 && m.profileCursor < len(m.profiles) {
 				return m.switchProfile(m.profiles[m.profileCursor], true)
 			}
 		case "a":
@@ -73,7 +73,7 @@ func (m model) updateProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.profileCursor--
 		}
 	case tea.KeyEnter:
-		if len(m.profiles) > 0 {
+		if len(m.profiles) > 0 && m.profileCursor < len(m.profiles) {
 			return m.switchProfile(m.profiles[m.profileCursor], false)
 		}
 	}
@@ -118,6 +118,9 @@ func (m model) switchProfile(p profile.Profile, reExecute bool) (tea.Model, tea.
 		if reExecute {
 			query := strings.TrimSpace(m.textarea.Value())
 			if query != "" {
+				if m.queryCancel != nil {
+					m.queryCancel()
+				}
 				ctx, cancel := context.WithCancel(context.Background())
 				m.querySeq++
 				m.queryCancel = cancel
