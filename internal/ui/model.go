@@ -444,7 +444,6 @@ func (m *model) resize() {
 	m.viewport.Width = contentWidth
 	m.viewport.Height = resultsHeight
 	m.viewportDirty = true
-	m.adjustColOffset()
 	m.syncViewport()
 }
 
@@ -484,7 +483,7 @@ func (m *model) visibleColumnRange() (int, int) {
 	}
 	sum := 0
 	for i := start; i < len(m.cachedColWidths); i++ {
-		w := m.cachedColWidths[i] + 2 // column width + cell gap
+		w := m.cachedColWidths[i] + 1 // column width + cell gap
 		if sum+w > available && i > start {
 			return start, i
 		}
@@ -507,6 +506,9 @@ func (m *model) syncViewport() {
 		m.viewport.SetContent(panel)
 		return
 	}
+
+	// Ensure colCursor stays within the visible window (e.g. after resize)
+	m.adjustColOffset()
 
 	visStart, visEnd := m.visibleColumnRange()
 
