@@ -2,14 +2,13 @@ package ui
 
 import (
 	"fmt"
-	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/kwrkb/asql/internal/db"
 	"github.com/kwrkb/asql/internal/profile"
 )
 
@@ -70,12 +69,22 @@ func (m model) updateProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyEnter:
 		if len(m.profiles) > 0 {
-			dsn := m.profiles[m.profileCursor].DSN
-			maskedDSN := maskDSNForUI(dsn)
-			m.setStatus(fmt.Sprintf("Profile DSN: %s (use @%s to connect)", maskedDSN, m.profiles[m.profileCursor].Name), false)
-			m.mode = normalMode
-			m.textarea.Blur()
-			return m, nil
+			p := m.profiles[m.profileCursor]
+			// If already active, just close the overlay
+			if m.connMgr.IsActive(p.DSN) {
+				m.mode = normalMode
+				m.textarea.Blur()
+				m.setStatus(fmt.Sprintf("Already connected to %s", p.Name), false)
+				return m, nil
+			}
+			m.setStatus(fmt.Sprintf("Connecting to %s...", p.Name), false)
+			name := p.Name
+			dsn := p.DSN
+			cm := m.connMgr
+			return m, func() tea.Msg {
+				err := cm.Switch(name, dsn)
+				return connSwitchedMsg{err: err}
+			}
 		}
 	}
 	return m, nil
@@ -112,31 +121,6 @@ func (m model) updateProfileNaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-var rePasswordInDSNUI = regexp.MustCompile(`(://[^:]*:)([^@]*)(@)`)
-
-func maskDSNForUI(dsn string) string {
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return rePasswordInDSNUI.ReplaceAllString(dsn, "${1}***${3}")
-	}
-	masked := false
-	if u.User != nil {
-		if _, hasPassword := u.User.Password(); hasPassword {
-			u.User = url.UserPassword(u.User.Username(), "***")
-			masked = true
-		}
-	}
-	q := u.Query()
-	if q.Get("password") != "" {
-		q.Set("password", "***")
-		u.RawQuery = q.Encode()
-		masked = true
-	}
-	if !masked {
-		return dsn
-	}
-	return u.String()
-}
 
 func (m model) renderWithProfileOverlay(background string) string {
 	modalWidth := min(m.width-4, 60)
@@ -193,13 +177,21 @@ func (m model) renderWithProfileOverlay(background string) string {
 		for i := start; i < end; i++ {
 			p := m.profiles[i]
 			label := sanitize(p.Name)
+			// Show connection status markers
+			if m.connMgr.IsActive(p.DSN) {
+				label = "\u25b6 " + label // ▶ active
+			} else if m.connMgr.IsConnected(p.DSN) {
+				label = "\u25cf " + label // ● connected
+			} else {
+				label = "  " + label
+			}
 			if i == m.profileCursor {
 				items.WriteString(selectedStyle.Render(label))
 			} else {
 				items.WriteString(itemStyle.Render(label))
 			}
 			// Show masked DSN preview
-			preview := sanitize(maskDSNForUI(p.DSN))
+			preview := sanitize(db.MaskDSN(p.DSN))
 			maxPreview := modalWidth - 10
 			runes := []rune(preview)
 			if maxPreview > 0 && len(runes) > maxPreview {
@@ -220,7 +212,7 @@ func (m model) renderWithProfileOverlay(background string) string {
 
 	var footer string
 	if !m.profileNaming {
-		footer = "\n" + lipgloss.NewStyle().Foreground(mutedTextColor).Background(panelBackground).Render("Enter:show d:delete a:add Esc:close")
+		footer = "\n" + lipgloss.NewStyle().Foreground(mutedTextColor).Background(panelBackground).Render("Enter:connect d:delete a:add Esc:close")
 	}
 
 	content := titleStyle.Render(title) + "\n" + items.String() + footer

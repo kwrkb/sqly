@@ -1,0 +1,99 @@
+package db
+
+import (
+	"net/url"
+	"regexp"
+	"strings"
+)
+
+var rePasswordInDSN = regexp.MustCompile(`(://[^:]*:)([^@]*)(@)`)
+
+// MaskDSN returns a display-safe version of the DSN with passwords masked.
+func MaskDSN(dsn string) string {
+	if !strings.Contains(dsn, "://") {
+		return dsn
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		// Best-effort: mask password in malformed URLs
+		return rePasswordInDSN.ReplaceAllString(dsn, "${1}***${3}")
+	}
+	masked := false
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			u.User = url.UserPassword(u.User.Username(), "***")
+			masked = true
+		}
+	}
+	q := u.Query()
+	if q.Get("password") != "" {
+		q.Set("password", "***")
+		u.RawQuery = q.Encode()
+		masked = true
+	}
+	if !masked {
+		return dsn
+	}
+	return u.String()
+}
+
+// DetectType returns the database type string for a given DSN.
+func DetectType(dsn string) string {
+	switch {
+	case strings.HasPrefix(dsn, "mysql://"):
+		return "mysql"
+	case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
+		return "postgres"
+	default:
+		return "sqlite"
+	}
+}
+
+// InitialQuery returns an appropriate initial query for the database type.
+func InitialQuery(dbType string) string {
+	switch dbType {
+	case "mysql":
+		return "SELECT VERSION();"
+	case "postgres":
+		return "SELECT version();"
+	default:
+		return "SELECT sqlite_version();"
+	}
+}
+
+// Placeholder returns an appropriate placeholder query for the database type.
+func Placeholder(dbType string) string {
+	switch dbType {
+	case "mysql":
+		return "SHOW TABLES;"
+	case "postgres":
+		return "SELECT tablename FROM pg_tables WHERE schemaname = 'public';"
+	default:
+		return "SELECT name FROM sqlite_master WHERE type = 'table';"
+	}
+}
+
+// DisplayName returns a short display name for a DSN.
+func DisplayName(dsn string) string {
+	switch {
+	case strings.HasPrefix(dsn, "mysql://"),
+		strings.HasPrefix(dsn, "postgres://"),
+		strings.HasPrefix(dsn, "postgresql://"):
+		return extractHost(dsn)
+	default:
+		parts := strings.Split(dsn, "/")
+		return parts[len(parts)-1]
+	}
+}
+
+func extractHost(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil || u.Host == "" {
+		return dsn
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "localhost"
+	}
+	return host
+}

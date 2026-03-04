@@ -281,7 +281,7 @@ func (m *model) getOrFetchColumns(tableName string) []string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	cols, err := m.db.Columns(ctx, tableName)
+	cols, err := m.activeDB().Columns(ctx, tableName)
 	if err != nil {
 		return nil
 	}

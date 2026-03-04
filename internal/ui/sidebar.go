@@ -45,7 +45,7 @@ func (m model) updateSidebar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		if len(m.sidebarTables) > 0 {
 			name := m.sidebarTables[m.sidebarCursor]
-			quoted := m.db.QuoteIdentifier(name)
+			quoted := m.activeDB().QuoteIdentifier(name)
 			query := fmt.Sprintf("SELECT * FROM %s LIMIT 100;", quoted)
 			m.textarea.SetValue(query)
 			m.sidebarOpen = false
