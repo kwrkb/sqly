@@ -89,7 +89,50 @@ func selectProfile(profiles []profile.Profile) (string, error) {
 	return profiles[choice-1].DSN, nil
 }
 
+const helpText = `asql — lightweight TUI SQL client for data observation
+
+Usage:
+  asql <database-path-or-dsn>
+  asql @<profile-name>
+  asql --save-profile <name> <dsn>
+  asql [--help | --version]
+
+Arguments:
+  <database-path-or-dsn>    SQLite file path or MySQL/PostgreSQL DSN
+  @<profile-name>           Connect using a saved profile
+
+Options:
+  --save-profile <name>     Save the DSN as a named profile and connect
+  --help, -h                Show this help message
+  --version, -v             Show version information
+
+Environment:
+  ASQL_DSN                  Default DSN (used when no argument is given)
+  DATABASE_URL              Fallback DSN
+
+If no argument or environment variable is set, asql will prompt you to
+select from saved profiles (~/.config/asql/profiles.yaml).
+
+Examples:
+  asql chinook.db
+  asql "mysql://root:pass@localhost:3306/mydb"
+  asql "postgres://user:pass@localhost:5432/mydb"
+  asql --save-profile prod "postgres://user:pass@db.example.com:5432/app"
+  asql @prod`
+
 func main() {
+	// Handle --help/-h and --version/-v before anything else
+	for _, arg := range os.Args[1:] {
+		switch arg {
+		case "--help", "-h":
+			fmt.Println(helpText)
+			return
+		case "--version", "-v":
+			fmt.Printf("asql %s (commit: %s, built: %s)\n", version, commit, date)
+			return
+		}
+	}
+
 	saveProfileName, args, parseErr := parseSaveProfile(os.Args)
 	if parseErr != nil {
 		fmt.Fprintln(os.Stderr, parseErr)
