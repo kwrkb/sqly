@@ -102,6 +102,9 @@ type model struct {
 	colOffset       int           // first visible column index for horizontal windowing
 	cachedColWidths []int         // cached column widths (recomputed only when result changes)
 	displayRows     []table.Row   // sorted rows for windowing source
+	lastVisStart    int           // cached visible range start for rebuild optimization
+	lastVisEnd      int           // cached visible range end for rebuild optimization
+	viewportDirty   bool          // forces column/row rebuild on next syncViewport
 	exportCursor      int
 	detailFieldCursor int
 	detailScroll      int
@@ -440,6 +443,8 @@ func (m *model) resize() {
 	m.table.SetHeight(max(resultsHeight-4, 3))
 	m.viewport.Width = contentWidth
 	m.viewport.Height = resultsHeight
+	m.viewportDirty = true
+	m.adjustColOffset()
 	m.syncViewport()
 }
 
@@ -463,6 +468,7 @@ func (m *model) adjustColOffset() {
 		m.colOffset++
 		_, visEnd = m.visibleColumnRange()
 	}
+	m.viewportDirty = true
 }
 
 // visibleColumnRange returns the range [start, end) of columns that fit within
@@ -504,44 +510,52 @@ func (m *model) syncViewport() {
 
 	visStart, visEnd := m.visibleColumnRange()
 
-	// Build windowed columns
-	selectedStyle := lipgloss.NewStyle().Reverse(true)
-	columns := make([]table.Column, 0, visEnd-visStart)
-	for i := visStart; i < visEnd; i++ {
-		header := sanitize(m.lastResult.Columns[i])
-		if i < len(m.lastResult.ColumnTypes) && m.lastResult.ColumnTypes[i] != "" {
-			shortType := dbutil.ShortenTypeName(sanitize(m.lastResult.ColumnTypes[i]))
-			header = header + " " + typeStyle.Render(shortType)
-		}
-		if i == m.sortCol && m.sortDir != sortNone {
-			header += sortIndicator(m.sortDir)
-		}
-		if m.mode == normalMode && i == m.colCursor {
-			header = selectedStyle.Render(header)
-		}
-		columns = append(columns, table.Column{Title: header, Width: m.cachedColWidths[i]})
-	}
-
-	// Build windowed rows
-	rows := make([]table.Row, 0, len(m.displayRows))
-	for _, row := range m.displayRows {
-		windowed := make(table.Row, 0, visEnd-visStart)
+	// Rebuild columns/rows only when the visible window or column cursor changes.
+	// For row-only navigation (j/k) we skip the expensive rebuild.
+	rebuildNeeded := visStart != m.lastVisStart || visEnd != m.lastVisEnd || m.viewportDirty
+	if rebuildNeeded {
+		// Build windowed columns
+		selectedStyle := lipgloss.NewStyle().Reverse(true)
+		columns := make([]table.Column, 0, visEnd-visStart)
 		for i := visStart; i < visEnd; i++ {
-			if i < len(row) {
-				windowed = append(windowed, row[i])
-			} else {
-				windowed = append(windowed, "")
+			header := sanitize(m.lastResult.Columns[i])
+			if i < len(m.lastResult.ColumnTypes) && m.lastResult.ColumnTypes[i] != "" {
+				shortType := dbutil.ShortenTypeName(sanitize(m.lastResult.ColumnTypes[i]))
+				header = header + " " + typeStyle.Render(shortType)
 			}
+			if i == m.sortCol && m.sortDir != sortNone {
+				header += sortIndicator(m.sortDir)
+			}
+			if m.mode == normalMode && i == m.colCursor {
+				header = selectedStyle.Render(header)
+			}
+			columns = append(columns, table.Column{Title: header, Width: m.cachedColWidths[i]})
 		}
-		rows = append(rows, windowed)
-	}
 
-	// Preserve table cursor position across column changes
-	cursor := m.table.Cursor()
-	m.table.SetRows([]table.Row{})
-	m.table.SetColumns(columns)
-	m.table.SetRows(rows)
-	m.table.SetCursor(cursor)
+		// Build windowed rows with sanitized cell values
+		rows := make([]table.Row, 0, len(m.displayRows))
+		for _, row := range m.displayRows {
+			windowed := make(table.Row, 0, visEnd-visStart)
+			for i := visStart; i < visEnd; i++ {
+				if i < len(row) {
+					windowed = append(windowed, sanitize(row[i]))
+				} else {
+					windowed = append(windowed, "")
+				}
+			}
+			rows = append(rows, windowed)
+		}
+
+		// Preserve table cursor position across column changes
+		cursor := m.table.Cursor()
+		m.table.SetRows([]table.Row{})
+		m.table.SetColumns(columns)
+		m.table.SetRows(rows)
+		m.table.SetCursor(cursor)
+		m.lastVisStart = visStart
+		m.lastVisEnd = visEnd
+		m.viewportDirty = false
+	}
 
 	panel := lipgloss.NewStyle().
 		Width(max(m.contentWidth(), 0)).
@@ -668,9 +682,9 @@ func (m model) renderStatusBar() string {
 		visCount := visEnd - m.colOffset
 		totalCols := len(m.lastResult.Columns)
 		if visCount < totalCols {
-			posInfo = fmt.Sprintf("col:%s [%d/%d] %d/%d", colName, m.colCursor+1, totalCols, m.table.Cursor()+1, len(m.lastResult.Rows))
+			posInfo = fmt.Sprintf("col:%s [%d/%d] %d/%d", sanitize(colName), m.colCursor+1, totalCols, m.table.Cursor()+1, len(m.lastResult.Rows))
 		} else {
-			posInfo = fmt.Sprintf("col:%s %d/%d", colName, m.table.Cursor()+1, len(m.lastResult.Rows))
+			posInfo = fmt.Sprintf("col:%s %d/%d", sanitize(colName), m.table.Cursor()+1, len(m.lastResult.Rows))
 		}
 	}
 	posStyle := lipgloss.NewStyle().Foreground(textColor).Background(statusBackground).Padding(0, 1)
@@ -748,11 +762,11 @@ func (m *model) applyResultWithSort(result db.QueryResult) {
 		m.cachedColWidths = nil
 		m.displayRows = nil
 		columns := []table.Column{{Title: "Result", Width: max(m.width-6, 20)}}
-		rows := []table.Row{{result.Message}}
+		rows := []table.Row{{sanitize(result.Message)}}
 		m.table.SetRows([]table.Row{})
 		m.table.SetColumns(columns)
 		m.table.SetRows(rows)
-		m.setStatus(result.Message, false)
+		m.setStatus(sanitize(result.Message), false)
 		m.syncViewport()
 		return
 	}
@@ -787,6 +801,7 @@ func (m *model) applyResultWithSort(result db.QueryResult) {
 		m.colOffset = 0
 	}
 
-	m.setStatus(result.Message, false)
+	m.setStatus(sanitize(result.Message), false)
+	m.viewportDirty = true
 	m.syncViewport()
 }
