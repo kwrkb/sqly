@@ -334,6 +334,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textarea.Blur()
 			return m, nil
 		}
+		// Cancel any in-flight query from the previous connection
+		if m.queryCancel != nil {
+			m.queryCancel()
+			m.queryCancel = nil
+		}
+		m.querySeq++ // invalidate stale query results
 		// Update dbPath to reflect new connection
 		m.dbPath = db.MaskDSN(m.connMgr.ActiveDSN())
 		m.rawDSN = m.connMgr.ActiveDSN()

@@ -1,25 +1,40 @@
 package db
 
 import (
+	"net/url"
+	"regexp"
 	"strings"
 )
+
+var rePasswordInDSN = regexp.MustCompile(`(://[^:]*:)([^@]*)(@)`)
 
 // MaskDSN returns a display-safe version of the DSN with passwords masked.
 func MaskDSN(dsn string) string {
 	if !strings.Contains(dsn, "://") {
 		return dsn
 	}
-	result := dsn
-	if idx := strings.Index(result, "://"); idx >= 0 {
-		rest := result[idx+3:]
-		if atIdx := strings.Index(rest, "@"); atIdx >= 0 {
-			userInfo := rest[:atIdx]
-			if colonIdx := strings.Index(userInfo, ":"); colonIdx >= 0 {
-				result = result[:idx+3] + userInfo[:colonIdx] + ":***" + rest[atIdx:]
-			}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		// Best-effort: mask password in malformed URLs
+		return rePasswordInDSN.ReplaceAllString(dsn, "${1}***${3}")
+	}
+	masked := false
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			u.User = url.UserPassword(u.User.Username(), "***")
+			masked = true
 		}
 	}
-	return result
+	q := u.Query()
+	if q.Get("password") != "" {
+		q.Set("password", "***")
+		u.RawQuery = q.Encode()
+		masked = true
+	}
+	if !masked {
+		return dsn
+	}
+	return u.String()
 }
 
 // DetectType returns the database type string for a given DSN.
@@ -61,9 +76,9 @@ func Placeholder(dbType string) string {
 // DisplayName returns a short display name for a DSN.
 func DisplayName(dsn string) string {
 	switch {
-	case strings.HasPrefix(dsn, "mysql://"):
-		return extractHost(dsn)
-	case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
+	case strings.HasPrefix(dsn, "mysql://"),
+		strings.HasPrefix(dsn, "postgres://"),
+		strings.HasPrefix(dsn, "postgresql://"):
 		return extractHost(dsn)
 	default:
 		parts := strings.Split(dsn, "/")
@@ -72,22 +87,13 @@ func DisplayName(dsn string) string {
 }
 
 func extractHost(dsn string) string {
-	idx := strings.Index(dsn, "://")
-	if idx < 0 {
+	u, err := url.Parse(dsn)
+	if err != nil || u.Host == "" {
 		return dsn
 	}
-	rest := dsn[idx+3:]
-	if atIdx := strings.Index(rest, "@"); atIdx >= 0 {
-		rest = rest[atIdx+1:]
-	}
-	if slashIdx := strings.Index(rest, "/"); slashIdx >= 0 {
-		rest = rest[:slashIdx]
-	}
-	if colonIdx := strings.LastIndex(rest, ":"); colonIdx >= 0 {
-		rest = rest[:colonIdx]
-	}
-	if rest == "" {
+	host := u.Hostname()
+	if host == "" {
 		return "localhost"
 	}
-	return rest
+	return host
 }

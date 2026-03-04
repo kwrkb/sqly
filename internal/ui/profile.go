@@ -2,14 +2,13 @@ package ui
 
 import (
 	"fmt"
-	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/kwrkb/asql/internal/db"
 	"github.com/kwrkb/asql/internal/profile"
 )
 
@@ -122,31 +121,6 @@ func (m model) updateProfileNaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-var rePasswordInDSNUI = regexp.MustCompile(`(://[^:]*:)([^@]*)(@)`)
-
-func maskDSNForUI(dsn string) string {
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return rePasswordInDSNUI.ReplaceAllString(dsn, "${1}***${3}")
-	}
-	masked := false
-	if u.User != nil {
-		if _, hasPassword := u.User.Password(); hasPassword {
-			u.User = url.UserPassword(u.User.Username(), "***")
-			masked = true
-		}
-	}
-	q := u.Query()
-	if q.Get("password") != "" {
-		q.Set("password", "***")
-		u.RawQuery = q.Encode()
-		masked = true
-	}
-	if !masked {
-		return dsn
-	}
-	return u.String()
-}
 
 func (m model) renderWithProfileOverlay(background string) string {
 	modalWidth := min(m.width-4, 60)
@@ -217,7 +191,7 @@ func (m model) renderWithProfileOverlay(background string) string {
 				items.WriteString(itemStyle.Render(label))
 			}
 			// Show masked DSN preview
-			preview := sanitize(maskDSNForUI(p.DSN))
+			preview := sanitize(db.MaskDSN(p.DSN))
 			maxPreview := modalWidth - 10
 			runes := []rune(preview)
 			if maxPreview > 0 && len(runes) > maxPreview {

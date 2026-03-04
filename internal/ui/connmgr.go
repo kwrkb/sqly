@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/kwrkb/asql/internal/db"
 	"github.com/kwrkb/asql/internal/db/mysql"
@@ -28,6 +29,7 @@ type connection struct {
 }
 
 type connManager struct {
+	mu     sync.RWMutex
 	conns  []connection
 	active int // index of active connection
 }
@@ -45,6 +47,8 @@ func newConnManager(name, dsn string, adapter db.DBAdapter) *connManager {
 
 // Active returns the currently active adapter.
 func (cm *connManager) Active() db.DBAdapter {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 	if cm == nil || len(cm.conns) == 0 {
 		return nil
 	}
@@ -53,6 +57,8 @@ func (cm *connManager) Active() db.DBAdapter {
 
 // ActiveName returns the name of the current connection.
 func (cm *connManager) ActiveName() string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 	if cm == nil || len(cm.conns) == 0 {
 		return ""
 	}
@@ -61,6 +67,8 @@ func (cm *connManager) ActiveName() string {
 
 // ActiveDSN returns the DSN of the current connection.
 func (cm *connManager) ActiveDSN() string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 	if cm == nil || len(cm.conns) == 0 {
 		return ""
 	}
@@ -71,6 +79,9 @@ func (cm *connManager) ActiveDSN() string {
 // If already connected, just makes it active.
 // If not connected, opens a new connection.
 func (cm *connManager) Switch(name, dsn string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	// Check if already connected
 	for i, c := range cm.conns {
 		if c.dsn == dsn {
@@ -98,6 +109,8 @@ func (cm *connManager) Switch(name, dsn string) error {
 
 // IsConnected checks if a DSN is already connected.
 func (cm *connManager) IsConnected(dsn string) bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 	for _, c := range cm.conns {
 		if c.dsn == dsn {
 			return true
@@ -108,6 +121,8 @@ func (cm *connManager) IsConnected(dsn string) bool {
 
 // IsActive checks if a DSN is the currently active connection.
 func (cm *connManager) IsActive(dsn string) bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
 	if cm == nil || len(cm.conns) == 0 {
 		return false
 	}
@@ -116,6 +131,8 @@ func (cm *connManager) IsActive(dsn string) bool {
 
 // CloseAll closes all connections.
 func (cm *connManager) CloseAll() {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
 	for _, c := range cm.conns {
 		c.adapter.Close()
 	}

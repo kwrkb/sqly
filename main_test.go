@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	dbpkg "github.com/kwrkb/asql/internal/db"
 	"github.com/kwrkb/asql/internal/profile"
 )
 
@@ -176,7 +177,7 @@ func TestMaskDSN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := MaskDSN(tt.dsn)
+			got := dbpkg.MaskDSN(tt.dsn)
 			if got != tt.want {
 				t.Errorf("MaskDSN(%q) = %q, want %q", tt.dsn, got, tt.want)
 			}

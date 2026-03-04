@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"os"
-	"regexp"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -78,7 +76,7 @@ func resolveDSN(args []string, getenv func(string) string, profiles []profile.Pr
 func selectProfile(profiles []profile.Profile) (string, error) {
 	fmt.Fprintln(os.Stderr, "Select a profile:")
 	for i, p := range profiles {
-		fmt.Fprintf(os.Stderr, "  [%d] %s  (%s)\n", i+1, p.Name, MaskDSN(p.DSN))
+		fmt.Fprintf(os.Stderr, "  [%d] %s  (%s)\n", i+1, p.Name, dbpkg.MaskDSN(p.DSN))
 	}
 	fmt.Fprint(os.Stderr, "Enter number: ")
 	var choice int
@@ -89,35 +87,6 @@ func selectProfile(profiles []profile.Profile) (string, error) {
 		return "", fmt.Errorf("selection out of range: %d", choice)
 	}
 	return profiles[choice-1].DSN, nil
-}
-
-var rePasswordInDSN = regexp.MustCompile(`(://[^:]*:)([^@]*)(@)`)
-
-func MaskDSN(dsn string) string {
-	u, err := url.Parse(dsn)
-	if err != nil {
-		// Best-effort: mask password in malformed URLs
-		return rePasswordInDSN.ReplaceAllString(dsn, "${1}***${3}")
-	}
-	masked := false
-	// Mask userinfo password (user:password@host)
-	if u.User != nil {
-		if _, hasPassword := u.User.Password(); hasPassword {
-			u.User = url.UserPassword(u.User.Username(), "***")
-			masked = true
-		}
-	}
-	// Mask query parameter password (?password=secret)
-	q := u.Query()
-	if q.Get("password") != "" {
-		q.Set("password", "***")
-		u.RawQuery = q.Encode()
-		masked = true
-	}
-	if !masked {
-		return dsn
-	}
-	return u.String()
 }
 
 func main() {
@@ -150,7 +119,7 @@ func main() {
 		profiles = newProfiles
 	}
 
-	displayDSN := MaskDSN(dbPath)
+	displayDSN := dbpkg.MaskDSN(dbPath)
 
 	var adapter dbpkg.DBAdapter
 	switch {
