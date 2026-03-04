@@ -37,14 +37,29 @@ asql "mysql://user:password@host:3306/dbname"
 
 # PostgreSQL
 asql "postgres://user:password@host:5432/dbname"
+
+# 保存済みプロファイルで接続
+asql @myprofile
+
+# 接続をプロファイルとして保存
+asql --save-profile myprofile "postgres://user:pass@host:5432/db"
+
+# 引数なし — 保存済みプロファイルから対話的に選択
+asql
 ```
 
 ## 主な機能
 
-- **型情報付きヘッダ** — カラム名と型を並べて表示（`name text`、`age integer`）
+- **型情報付きヘッダ** — カラム名と型を並べて表示（`name text`、`age int`）
 - **NULL / 空文字の区別** — NULL は `NULL`、空文字は `""` で表示し混同を防止
 - **インプレースソート** — `s` キーでソート切替（None → Asc → Desc）、NULL は常に末尾
-- **クエリ履歴** — INSERT モードで `Ctrl+P` / `Ctrl+N` で過去のクエリを呼び出し
+- **行詳細表示** — `Enter` でオーバーレイ表示、`j`/`k` でフィールド移動、`n`/`N` で行遷移
+- **水平スクロール** — 多カラムテーブルを `h`/`l` で列単位スクロール、ステータスバーに `[3/12]` 表示
+- **Tab 補完** — INSERT モードで `Tab` キーを押すと文脈に応じたテーブル名・カラム名を補完
+- **クエリ履歴** — `Ctrl+P` / `Ctrl+N` で過去のクエリを呼び出し、`Ctrl+R` で履歴検索
+- **保存クエリ（スニペット）** — `Ctrl+S` でクエリを保存、NORMAL モードで `S` でブラウズ
+- **接続プロファイル** — DB 接続情報を保存・読込、NORMAL モードで `P` で切替
+- **複数接続同時保持** — プロファイル切替時に既存接続を再利用、再接続のオーバーヘッドなし
 - **ページング表示** — ステータスバーに現在位置とカラム情報を表示（`col:name 1/100`）
 - **テーブルサイドバー** — テーブル一覧をブラウズし、ワンキーで SELECT を挿入
 - **エクスポート** — CSV / JSON / Markdown でコピー、またはファイル保存
@@ -57,22 +72,21 @@ asql "postgres://user:password@host:5432/dbname"
 | `i` | NORMAL | INSERT モードに入る |
 | `Esc` | INSERT | NORMAL モードに戻る |
 | `Ctrl+Enter` / `Ctrl+J` | INSERT | クエリを実行 |
+| `Tab` | INSERT | テーブル名・カラム名を補完 |
 | `Ctrl+P` / `Ctrl+N` | INSERT | クエリ履歴の前 / 次 |
+| `Ctrl+R` | INSERT | クエリ履歴を検索 |
+| `Ctrl+S` | INSERT | 現在のクエリをスニペットとして保存 |
+| `Ctrl+L` | INSERT | エディタをクリア |
 | `j` / `k` | NORMAL | 結果行を移動 |
-| `h` / `l` | NORMAL | カラムを選択（ソート用） |
+| `h` / `l` | NORMAL | カラムを水平スクロール |
 | `s` | NORMAL | 選択カラムのソートを切替 |
+| `Enter` | NORMAL | 現在行の詳細表示を開く |
 | `PgUp` / `PgDn` | NORMAL | ページ移動 |
 | `t` | NORMAL | テーブルサイドバーを開く |
-| `j` / `k` | SIDEBAR | テーブルを移動 |
-| `Enter` | SIDEBAR | テーブルの SELECT クエリを挿入 |
-| `Esc` / `t` | SIDEBAR | サイドバーを閉じる |
+| `S` | NORMAL | 保存クエリ（スニペット）を開く |
+| `P` | NORMAL | 接続プロファイルを開く |
 | `e` | NORMAL | エクスポートメニューを開く |
-| `j` / `k` | EXPORT | 選択肢を移動 |
-| `Enter` | EXPORT | エクスポート実行 |
-| `Esc` | EXPORT | キャンセル |
 | `Ctrl+K` | NORMAL | AI アシスタントを開く |
-| `Enter` | AI | SQL を生成 |
-| `Esc` | AI | キャンセル |
 | `Ctrl+C` | *全モード* | 実行中のクエリ/AI をキャンセル、または終了 |
 | `q` | NORMAL | 終了 |
 
