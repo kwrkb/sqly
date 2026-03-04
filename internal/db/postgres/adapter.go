@@ -61,6 +61,27 @@ func (a *Adapter) Tables(ctx context.Context) ([]string, error) {
 	return tables, rows.Err()
 }
 
+func (a *Adapter) Columns(ctx context.Context, tableName string) ([]string, error) {
+	rows, err := a.conn.QueryContext(ctx, `
+		SELECT column_name FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = $1
+		ORDER BY ordinal_position`, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cols []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		cols = append(cols, name)
+	}
+	return cols, rows.Err()
+}
+
 func (a *Adapter) Schema(ctx context.Context) (string, error) {
 	// Build CREATE TABLE statements from information_schema.columns
 	tables, err := a.Tables(ctx)
