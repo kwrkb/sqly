@@ -288,8 +288,11 @@ func (m *model) getOrFetchColumns(tableName string) []string {
 	// Cap cache size to prevent unbounded growth
 	const maxColCacheSize = 64
 	if len(m.completionColCache) >= maxColCacheSize {
-		// Evict all entries when limit reached
-		m.completionColCache = make(map[string][]string)
+		// Evict one random entry to make space
+		for k := range m.completionColCache {
+			delete(m.completionColCache, k)
+			break
+		}
 	}
 	m.completionColCache[tableName] = cols
 	return cols
