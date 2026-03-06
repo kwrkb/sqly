@@ -798,20 +798,22 @@ func (m model) renderStatusBar() string {
 	}
 
 	var posInfo string
-	if m.pinned != nil && m.comparePane == 0 && len(m.pinned.result.Columns) > 0 && len(m.pinned.result.Rows) > 0 {
+	if m.pinned != nil && m.comparePane == 0 {
 		// Show pinned pane position when focused
 		p := m.pinned
-		colName := ""
-		if p.colCursor < len(p.result.Columns) {
-			colName = p.result.Columns[p.colCursor]
-		}
-		_, visEnd := p.visibleColumnRange(m.comparePaneWidth())
-		visCount := visEnd - p.colOffset
-		totalCols := len(p.result.Columns)
-		if visCount < totalCols {
-			posInfo = fmt.Sprintf("col:%s [%d/%d] %d/%d", sanitize(colName), p.colCursor+1, totalCols, p.table.Cursor()+1, len(p.result.Rows))
-		} else {
-			posInfo = fmt.Sprintf("col:%s %d/%d", sanitize(colName), p.table.Cursor()+1, len(p.result.Rows))
+		if len(p.result.Columns) > 0 && len(p.result.Rows) > 0 {
+			colName := ""
+			if p.colCursor < len(p.result.Columns) {
+				colName = p.result.Columns[p.colCursor]
+			}
+			_, visEnd := p.visibleColumnRange(m.comparePaneWidth())
+			visCount := visEnd - p.colOffset
+			totalCols := len(p.result.Columns)
+			if visCount < totalCols {
+				posInfo = fmt.Sprintf("col:%s [%d/%d] %d/%d", sanitize(colName), p.colCursor+1, totalCols, p.table.Cursor()+1, len(p.result.Rows))
+			} else {
+				posInfo = fmt.Sprintf("col:%s %d/%d", sanitize(colName), p.table.Cursor()+1, len(p.result.Rows))
+			}
 		}
 	} else if len(m.lastResult.Columns) > 0 && len(m.lastResult.Rows) > 0 {
 		colName := ""
