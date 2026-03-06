@@ -126,6 +126,8 @@ type model struct {
 	profileCursor     int
 	profileNaming     bool
 	profileInput      textinput.Model
+	pinned      *pinnedPane // nil = side-by-side OFF
+	comparePane int         // 0=left(pinned), 1=right(active)
 	historySearchInput   textinput.Model
 	historySearchResults []int // indices into queryHistory (filtered)
 	historySearchCursor  int
@@ -403,7 +405,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case insertMode:
 		m.textarea, cmd = m.textarea.Update(msg)
 	case normalMode:
-		m.table, cmd = m.table.Update(msg)
+		// Route passthrough events to the focused pane in compare mode
+		if m.pinned != nil && m.comparePane == 0 {
+			m.pinned.table, cmd = m.pinned.table.Update(msg)
+		} else {
+			m.table, cmd = m.table.Update(msg)
+		}
 	case historySearchMode:
 		m.historySearchInput, cmd = m.historySearchInput.Update(msg)
 	case sidebarMode:
@@ -418,7 +425,7 @@ func (m model) View() string {
 		return "Loading..."
 	}
 
-	contentWidth := m.contentWidth()
+	fullWidth := m.fullContentWidth()
 
 	editorView := m.textarea.View()
 	if m.completionActive && len(m.completionItems) > 0 {
@@ -427,16 +434,21 @@ func (m model) View() string {
 	}
 
 	editor := lipgloss.NewStyle().
-		Width(contentWidth).
+		Width(fullWidth).
 		Height(m.editorHeight()).
 		Background(appBackground).
 		Render(editorView)
 
-	results := lipgloss.NewStyle().
-		Width(contentWidth).
-		Height(m.resultsHeight()).
-		Background(appBackground).
-		Render(m.viewport.View())
+	var results string
+	if m.pinned != nil {
+		results = m.renderCompareView()
+	} else {
+		results = lipgloss.NewStyle().
+			Width(fullWidth).
+			Height(m.resultsHeight()).
+			Background(appBackground).
+			Render(m.viewport.View())
+	}
 
 	main := lipgloss.JoinVertical(lipgloss.Left, editor, results)
 
@@ -477,6 +489,18 @@ func (m model) View() string {
 }
 
 func (m *model) contentWidth() int {
+	w := m.width
+	if m.sidebarOpen {
+		w = max(w-sidebarWidth, 20)
+	}
+	if m.pinned != nil {
+		return w / 2
+	}
+	return w
+}
+
+// fullContentWidth returns the total width available for content (without compare split).
+func (m *model) fullContentWidth() int {
 	if m.sidebarOpen {
 		return max(m.width-sidebarWidth, 20)
 	}
@@ -484,7 +508,6 @@ func (m *model) contentWidth() int {
 }
 
 func (m *model) resize() {
-	contentWidth := m.contentWidth()
 	editorHeight := m.editorHeight()
 	resultsHeight := m.resultsHeight()
 
@@ -494,15 +517,33 @@ func (m *model) resize() {
 		if m.mode == sidebarMode {
 			m.mode = normalMode
 		}
-		contentWidth = m.width
 	}
 
-	m.textarea.SetWidth(max(contentWidth-4, 20))
+	// Auto-close compare if terminal too narrow
+	if m.pinned != nil && m.fullContentWidth() < minWidthForCompare {
+		m.pinned = nil
+		m.comparePane = 0
+		m.table.SetStyles(focusedTableStyles())
+		m.setStatus("Compare closed (terminal too narrow)", false)
+	}
+
+	fullWidth := m.fullContentWidth()
+	contentWidth := m.contentWidth() // half if compare active
+
+	m.textarea.SetWidth(max(fullWidth-4, 20))
 	m.textarea.SetHeight(max(editorHeight-2, 5))
 
-	m.table.SetHeight(max(resultsHeight-4, 3))
+	if m.pinned != nil {
+		compareHeight := resultsHeight - 1 // subtract label row
+		m.table.SetHeight(max(compareHeight-4, 3))
+		m.pinned.table.SetHeight(max(compareHeight-4, 3))
+		m.pinned.viewportDirty = true
+	} else {
+		m.table.SetHeight(max(resultsHeight-4, 3))
+	}
 	m.viewport.Width = contentWidth
 	m.viewport.Height = resultsHeight
+
 	m.viewportDirty = true
 	m.syncViewport()
 }
@@ -588,7 +629,7 @@ func (m *model) syncViewport() {
 			if i == m.sortCol && m.sortDir != sortNone {
 				header += sortIndicator(m.sortDir)
 			}
-			if m.mode == normalMode && i == m.colCursor {
+			if m.mode == normalMode && i == m.colCursor && (m.pinned == nil || m.comparePane == 1) {
 				header = selectedStyle.Render(header)
 			}
 			columns = append(columns, table.Column{Title: header, Width: m.cachedColWidths[i]})
@@ -700,10 +741,12 @@ func (m model) renderStatusBar() string {
 	} else {
 		switch m.mode {
 		case normalMode:
-			if m.aiEnabled {
-				hints = "h/l:col s:sort R:re-exec t:tables i:insert e:export S:snippets P:profiles C-k:AI q:quit"
+			if m.pinned != nil {
+				hints = "c:close Tab:switch h/l:col s:sort j/k:row i:insert q:quit"
+			} else if m.aiEnabled {
+				hints = "c:compare h/l:col s:sort R:re-exec t:tables i:insert e:export S:snippets P:profiles C-k:AI q:quit"
 			} else {
-				hints = "h/l:col s:sort R:re-exec t:tables i:insert e:export S:snippets P:profiles q:quit"
+				hints = "c:compare h/l:col s:sort R:re-exec t:tables i:insert e:export S:snippets P:profiles q:quit"
 			}
 		case insertMode:
 			if m.completionActive {
@@ -741,8 +784,36 @@ func (m model) renderStatusBar() string {
 	connName := sanitize(m.connMgr.ActiveName())
 	dbLabelStyle := lipgloss.NewStyle().Padding(0, 1).Foreground(keywordColor).Background(statusBackground)
 
+	// Show both connection names in compare mode
+	if m.pinned != nil {
+		pinnedName := sanitize(m.pinned.connName)
+		if pinnedName == "" {
+			pinnedName = "pinned"
+		}
+		activeName := connName
+		if activeName == "" {
+			activeName = "active"
+		}
+		connName = pinnedName + " | " + activeName
+	}
+
 	var posInfo string
-	if len(m.lastResult.Columns) > 0 && len(m.lastResult.Rows) > 0 {
+	if m.pinned != nil && m.comparePane == 0 && len(m.pinned.result.Columns) > 0 && len(m.pinned.result.Rows) > 0 {
+		// Show pinned pane position when focused
+		p := m.pinned
+		colName := ""
+		if p.colCursor < len(p.result.Columns) {
+			colName = p.result.Columns[p.colCursor]
+		}
+		_, visEnd := p.visibleColumnRange(m.comparePaneWidth())
+		visCount := visEnd - p.colOffset
+		totalCols := len(p.result.Columns)
+		if visCount < totalCols {
+			posInfo = fmt.Sprintf("col:%s [%d/%d] %d/%d", sanitize(colName), p.colCursor+1, totalCols, p.table.Cursor()+1, len(p.result.Rows))
+		} else {
+			posInfo = fmt.Sprintf("col:%s %d/%d", sanitize(colName), p.table.Cursor()+1, len(p.result.Rows))
+		}
+	} else if len(m.lastResult.Columns) > 0 && len(m.lastResult.Rows) > 0 {
 		colName := ""
 		if m.colCursor < len(m.lastResult.Columns) {
 			colName = m.lastResult.Columns[m.colCursor]

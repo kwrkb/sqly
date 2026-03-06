@@ -39,22 +39,71 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.exportCursor = 0
 				m.setStatus("Export mode", false)
 			}
+		case "c":
+			if m.pinned != nil {
+				// Toggle off
+				m.pinned = nil
+				m.comparePane = 0
+				m.table.SetStyles(focusedTableStyles())
+				m.setStatus("Compare closed", false)
+				m.viewportDirty = true
+				m.resize()
+			} else {
+				if len(m.lastResult.Columns) == 0 {
+					m.setStatus("No query results to compare", true)
+					break
+				}
+				if m.fullContentWidth() < minWidthForCompare {
+					m.setStatus("Terminal too narrow for compare", true)
+					break
+				}
+				m.pinned = m.pinCurrentResult()
+				m.comparePane = 1 // focus on right (active) pane
+				m.setStatus("Pinned result to left pane — switch connection and re-execute", false)
+				m.resize()
+			}
 		case "j":
-			m.table.MoveDown(1)
+			if m.pinned != nil && m.comparePane == 0 {
+				m.pinned.table.MoveDown(1)
+			} else {
+				m.table.MoveDown(1)
+			}
 		case "k":
-			m.table.MoveUp(1)
+			if m.pinned != nil && m.comparePane == 0 {
+				m.pinned.table.MoveUp(1)
+			} else {
+				m.table.MoveUp(1)
+			}
 		case "h":
-			if m.colCursor > 0 {
-				m.colCursor--
-				m.adjustColOffset()
+			if m.pinned != nil && m.comparePane == 0 {
+				if m.pinned.colCursor > 0 {
+					m.pinned.colCursor--
+					m.pinned.adjustColOffset(m.comparePaneWidth())
+				}
+			} else {
+				if m.colCursor > 0 {
+					m.colCursor--
+					m.adjustColOffset()
+				}
 			}
 		case "l":
-			if len(m.lastResult.Columns) > 0 && m.colCursor < len(m.lastResult.Columns)-1 {
-				m.colCursor++
-				m.adjustColOffset()
+			if m.pinned != nil && m.comparePane == 0 {
+				if len(m.pinned.result.Columns) > 0 && m.pinned.colCursor < len(m.pinned.result.Columns)-1 {
+					m.pinned.colCursor++
+					m.pinned.adjustColOffset(m.comparePaneWidth())
+				}
+			} else {
+				if len(m.lastResult.Columns) > 0 && m.colCursor < len(m.lastResult.Columns)-1 {
+					m.colCursor++
+					m.adjustColOffset()
+				}
 			}
 		case "s":
-			if len(m.lastResult.Columns) > 0 {
+			if m.pinned != nil && m.comparePane == 0 {
+				if len(m.pinned.result.Columns) > 0 {
+					m.togglePinnedSort()
+				}
+			} else if len(m.lastResult.Columns) > 0 {
 				m.toggleSort()
 			}
 		case "P":
@@ -78,6 +127,20 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.textarea.Blur()
 			m.setStatus("Snippet mode", false)
 		}
+	case tea.KeyTab:
+		if m.pinned != nil {
+			if m.comparePane == 0 {
+				m.comparePane = 1
+				m.pinned.table.SetStyles(unfocusedTableStyles())
+				m.table.SetStyles(focusedTableStyles())
+			} else {
+				m.comparePane = 0
+				m.pinned.table.SetStyles(focusedTableStyles())
+				m.table.SetStyles(unfocusedTableStyles())
+			}
+			m.pinned.viewportDirty = true
+			m.viewportDirty = true
+		}
 	case tea.KeyCtrlS:
 		return m.enterSnippetNamingMode()
 	case tea.KeyCtrlK:
@@ -99,14 +162,28 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Detail mode", false)
 		}
 	case tea.KeyPgUp, tea.KeyPgDown:
-		m.table, _ = m.table.Update(msg)
+		if m.pinned != nil && m.comparePane == 0 {
+			m.pinned.table, _ = m.pinned.table.Update(msg)
+		} else {
+			m.table, _ = m.table.Update(msg)
+		}
 	case tea.KeyLeft:
-		if m.colCursor > 0 {
+		if m.pinned != nil && m.comparePane == 0 {
+			if m.pinned.colCursor > 0 {
+				m.pinned.colCursor--
+				m.pinned.adjustColOffset(m.comparePaneWidth())
+			}
+		} else if m.colCursor > 0 {
 			m.colCursor--
 			m.adjustColOffset()
 		}
 	case tea.KeyRight:
-		if len(m.lastResult.Columns) > 0 && m.colCursor < len(m.lastResult.Columns)-1 {
+		if m.pinned != nil && m.comparePane == 0 {
+			if len(m.pinned.result.Columns) > 0 && m.pinned.colCursor < len(m.pinned.result.Columns)-1 {
+				m.pinned.colCursor++
+				m.pinned.adjustColOffset(m.comparePaneWidth())
+			}
+		} else if len(m.lastResult.Columns) > 0 && m.colCursor < len(m.lastResult.Columns)-1 {
 			m.colCursor++
 			m.adjustColOffset()
 		}
