@@ -4,9 +4,21 @@
 
 A lightweight TUI SQL client for **data observation** — quickly see, sort, and explore raw data to spot anomalies and form hypotheses. Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea). Supports SQLite, MySQL, and PostgreSQL.
 
+## Compare Mode
+
+![compare demo](docs/compare-demo.gif)
+
+> Spot the diff between prod and staging in 3 seconds — right in your terminal.
+
 ## Demo
 
 ![asql demo](docs/demo.gif)
+
+## Philosophy
+
+asql is not an analytics platform — it's a **data observation tool**.
+
+Heavy lifting belongs in the cloud. asql is for the moment *before* that: quickly touching raw data, noticing anomalies, and forming hypotheses. It stays light, stays quiet, and becomes indispensable.
 
 ## Installation
 

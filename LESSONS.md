@@ -106,24 +106,29 @@ Set Height 600
 Set FontSize 16
 ```
 
-### Hide ブロック後に clear が必要
+### Hide/Show はターミナルバッファをクリアしない
 
 **文脈**: `Hide` / `Show` でセットアップコマンドを隠したが、Show 後の最初のフレームにセットアップコマンドの出力が残っていた。
 
-**学び**: `Hide` は VHS のフレームキャプチャを停止するだけで、ターミナルの表示状態はリセットしない。Show 前に `clear` を入れてターミナルをクリーンにする。
+**学び**: `Hide` は VHS のフレームキャプチャを停止するだけで、ターミナルの表示状態はリセットしない。Hidden フェーズのコマンド出力はそのままバッファに残る。対策として (1) コマンド出力を `>/dev/null 2>&1` で抑制、(2) TUI アプリが全画面を上書きする場合はそれに頼る。`clear` を Hidden フェーズ内で実行しても完全にはクリアされないケースがある。
 
-**パターン**:
-```
-Hide
-Set TypingSpeed 1ms
-Type "setup-command"
-Enter
-Sleep 500ms
-Type "clear"
-Enter
-Sleep 200ms
-Show
-```
+### --save-profile 等の TUI 起動コマンドは VHS の Hidden フェーズで使えない
+
+**文脈**: `./asql --save-profile prod db.db` を Hidden フェーズで実行したところ、プロファイル保存後に TUI が起動してハングし、後続コマンドが実行されなかった。
+
+**学び**: CLI ツールが「設定保存 + TUI 起動」を一体で行う場合、VHS tape 内で非対話的に実行できない。プロファイル等の事前設定は VHS 外で行い、tape 内では DB セットアップスクリプトのみ実行する。
+
+### compare モードには十分なターミナル列数が必要
+
+**文脈**: `Set Width 1200` / `Set FontSize 16` で GIF を生成したところ、`c` キー押下時に「Terminal too narrow for compare」エラーが表示された。
+
+**学び**: VHS のピクセル幅とフォントサイズからターミナル列数が決まる。asql の compare モードは `minWidthForCompare = 80` 列が必要。split ビューでは各ペインに十分な幅が要るため、`Set Width 1800` / `Set FontSize 14` 程度を使う。
+
+### asql は INSERT モードで起動する — VHS tape で `Type "i"` は不要
+
+**文脈**: vim 風に `i` で INSERT モードに入る想定で tape に `Type "i"` を入れたところ、文字 `i` がエディタに入力されてしまった。
+
+**学び**: asql は `mode: insertMode` で起動する（`model.go:230`）。起動直後は既に INSERT モードなので、`Ctrl+l` でエディタをクリアしてからクエリを入力する。
 
 ---
 
@@ -152,6 +157,21 @@ for i := scrollOffset; i < len(items); i++ { ... }
 **学び**: スクロール計算の「1アイテムあたりの行数」は、装飾・空行・セパレータを含めた **実際の描画行数** を数えること。コードコメントの「label + value」のような概念的な記述と実装の乖離に注意。
 
 **パターン**: 描画ループ内で `WriteByte('\n')` を何回呼んでいるか数えて `linesPerField` を決める。
+
+### sentinel 行がある場合の境界チェックは「データ行数」で判定する
+
+**文脈**: `cellDiffAt` で `rowIdx >= selfCount || rowIdx >= len(selfRows)` としていたが、`selfCount`（実データ行数）≤ `len(selfRows)`（sentinel 含む表示行数）が常に成り立つため、`len(selfRows)` のチェックは冗長だった。Gemini bot レビューで検出。
+
+**学び**: sentinel 行（`(no rows)` 等）を含む `displayRows` と実データ行数 `len(result.Rows)` が異なる場合、境界チェックは「実データ行数」側で行えば十分。表示行数との OR 条件は冗長で、意図を曖昧にする。
+
+**パターン**:
+```go
+// NG: 冗長な二重チェック
+if rowIdx >= selfCount || rowIdx >= len(selfRows) { ... }
+
+// OK: データ行数だけで判定（sentinel は selfCount 未満にならない）
+if rowIdx >= selfCount { ... }
+```
 
 ### 新しい描画パスには既存の sanitize() を忘れずに適用する
 
