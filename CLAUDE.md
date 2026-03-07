@@ -25,6 +25,9 @@ go build
 # テスト
 go test ./...
 
+# E2E テスト（VHS）— 実行前に e2e/README.md を必ず読むこと
+bash e2e/run.sh
+
 # 静的解析
 go vet ./...
 ```
