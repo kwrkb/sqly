@@ -64,6 +64,8 @@ asql --version
 - **Saved queries (Snippets)** — save frequently used queries with `Ctrl+S`; browse with `S` in NORMAL mode
 - **Connection profiles** — save/load database connections; switch between them with `P` in NORMAL mode
 - **Multi-connection** — connections stay open when switching profiles; no re-connect overhead
+- **Side-by-side compare mode** — press `c` to pin current result and split the screen into left (pinned) / right (active) panes; use `Tab` to switch focus
+- **Fast re-execution across connections** — press `R` to re-run the current query; in profile mode, `x` switches connection and immediately re-runs
 - **Paging indicator** — status bar shows current position and column info (`col:name 1/100`)
 - **Table sidebar** — browse tables, insert SELECT with one key
 - **Export** — copy results as CSV / JSON / Markdown, or save to file
@@ -81,14 +83,18 @@ asql --version
 | `Ctrl+R` | INSERT | Search query history |
 | `Ctrl+S` | INSERT | Save current query as snippet |
 | `Ctrl+L` | INSERT | Clear editor |
+| `c` | NORMAL | Toggle compare mode (pin current result / close compare) |
+| `Tab` | NORMAL (compare) | Switch focused pane (left/right) |
 | `j` / `k` | NORMAL | Navigate result rows |
 | `h` / `l` | NORMAL | Scroll columns horizontally |
 | `s` | NORMAL | Toggle sort on selected column |
+| `R` | NORMAL | Re-execute current query |
 | `Enter` | NORMAL | Open Detail View for current row |
 | `PgUp` / `PgDn` | NORMAL | Page through results |
 | `t` | NORMAL | Open table sidebar |
 | `S` | NORMAL | Open saved snippets |
 | `P` | NORMAL | Open connection profiles |
+| `x` | PROFILE | Switch connection and re-execute current query |
 | `e` | NORMAL | Open export menu |
 | `Ctrl+K` | NORMAL | Open AI assistant |
 | `Ctrl+C` | *any* | Cancel running query/AI, or quit |
