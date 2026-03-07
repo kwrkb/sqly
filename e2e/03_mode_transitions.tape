@@ -2,6 +2,7 @@
 # Verifies: INSERT -> NORMAL -> SIDEBAR -> NORMAL -> INSERT
 
 Output e2e/recordings/03_mode_transitions.mp4
+Output e2e/recordings/03_mode_transitions.gif
 
 Set Shell "bash"
 Set Width 1200

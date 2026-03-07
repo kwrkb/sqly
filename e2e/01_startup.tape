@@ -2,6 +2,7 @@
 # Verifies: launch in INSERT mode, switch to NORMAL, open sidebar, see tables
 
 Output e2e/recordings/01_startup.mp4
+Output e2e/recordings/01_startup.gif
 
 Set Shell "bash"
 Set Width 1200

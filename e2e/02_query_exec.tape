@@ -2,6 +2,7 @@
 # Verifies: type query, execute, see result rows and data
 
 Output e2e/recordings/02_query_exec.mp4
+Output e2e/recordings/02_query_exec.gif
 
 Set Shell "bash"
 Set Width 1200

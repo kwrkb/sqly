@@ -2,6 +2,7 @@
 # Verifies: execute query, open export overlay, see format options
 
 Output e2e/recordings/04_export.mp4
+Output e2e/recordings/04_export.gif
 
 Set Shell "bash"
 Set Width 1200

@@ -1,6 +1,6 @@
 # E2E Tests
 
-VHS を使った TUI の E2E テスト。テキストアサーション + MP4 録画による目視確認。
+VHS を使った TUI の E2E テスト。テキストアサーション + MP4/GIF 録画による目視確認。
 
 ## 前提
 
@@ -21,7 +21,7 @@ go install github.com/charmbracelet/vhs@latest
 bash e2e/run.sh
 ```
 
-全 tape を順に実行し、PASS/FAIL を表示する。MP4 録画は `e2e/recordings/` に出力される。
+全 tape を順に実行し、PASS/FAIL を表示する。MP4 + GIF が `e2e/recordings/` に出力される。
 
 ## 目視確認の手順
 
@@ -59,7 +59,7 @@ bash e2e/run.sh
 
 ## 録画について
 
-- 各 tape の `Output` 行で `e2e/recordings/<name>.mp4` に出力
+- 各 tape の `Output` 行で `e2e/recordings/<name>.mp4` と `.gif` を同時出力
 - `e2e/recordings/` は `.gitignore` 済み（ローカル専用）
 - `TypingSpeed 50ms` + 操作間 `Sleep` で目視しやすい速度に調整済み
 

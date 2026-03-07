@@ -2,6 +2,7 @@
 # Verifies: invalid SQL shows error in status bar
 
 Output e2e/recordings/05_error.mp4
+Output e2e/recordings/05_error.gif
 
 Set Shell "bash"
 Set Width 1200
