@@ -119,7 +119,7 @@ func cellDiffAt(rowIdx, colIdx int, selfRows []table.Row, selfCount int, otherRo
 		return false
 	}
 	// No backing row (e.g. "(no rows)" sentinel): don't highlight.
-	if rowIdx >= selfCount || rowIdx >= len(selfRows) {
+	if rowIdx >= selfCount {
 		return false
 	}
 
@@ -127,7 +127,7 @@ func cellDiffAt(rowIdx, colIdx int, selfRows []table.Row, selfCount int, otherRo
 	selfHas := colIdx < len(selfRow)
 
 	// Other side has no row at this index: highlight existing cells only.
-	if rowIdx >= otherCount || rowIdx >= len(otherRows) {
+	if rowIdx >= otherCount {
 		return selfHas
 	}
 
