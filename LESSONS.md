@@ -124,6 +124,25 @@ Set FontSize 16
 
 **学び**: VHS のピクセル幅とフォントサイズからターミナル列数が決まる。asql の compare モードは `minWidthForCompare = 80` 列が必要。split ビューでは各ペインに十分な幅が要るため、`Set Width 1800` / `Set FontSize 14` 程度を使う。
 
+### VHS v0.10.0 の Wait 構文は `Wait+Screen /<regex>/`
+
+**文脈**: `Wait 5s "INSERT"` と書いたら `Invalid command` エラーが大量に出た。
+
+**学び**: VHS v0.10.0 の Wait 構文は旧ドキュメントと異なる。正しくは `Wait+Screen@<timeout> /<regexp>/`。タイムアウトは `Set WaitTimeout` でグローバル設定可能。
+
+**パターン**:
+```
+Set WaitTimeout 10s
+Wait+Screen /INSERT/
+Wait+Screen /alice@example\.com/
+```
+
+### オーバーレイが画面を覆うとステータスバーのテキストが Wait で検出できない
+
+**文脈**: Export オーバーレイ表示時に `Wait+Screen /EXPORT/` が失敗。ステータスバーはオーバーレイの後ろに隠れていた。
+
+**学び**: `Wait+Screen` は画面に実際に表示されている文字列のみマッチする。オーバーレイで隠れた部分は検出できない。オーバーレイ内のテキスト（例: `Export Results`）を Wait パターンに使う。
+
 ### asql は INSERT モードで起動する — VHS tape で `Type "i"` は不要
 
 **文脈**: vim 風に `i` で INSERT モードに入る想定で tape に `Type "i"` を入れたところ、文字 `i` がエディタに入力されてしまった。
