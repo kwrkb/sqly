@@ -12,25 +12,7 @@ A lightweight TUI SQL client for **data observation** — quickly see, sort, and
 
 ## Demo
 
-### Startup & Table Sidebar
-
-<video src="e2e/recordings/01_startup.mp4" autoplay loop muted></video>
-
-### Query Execution
-
-<video src="e2e/recordings/02_query_exec.mp4" autoplay loop muted></video>
-
-### Mode Transitions
-
-<video src="e2e/recordings/03_mode_transitions.mp4" autoplay loop muted></video>
-
-### Export
-
-<video src="e2e/recordings/04_export.mp4" autoplay loop muted></video>
-
-### Error Handling
-
-<video src="e2e/recordings/05_error.mp4" autoplay loop muted></video>
+![asql demo](docs/demo.gif)
 
 ## Philosophy
 

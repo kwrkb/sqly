@@ -22,6 +22,9 @@ dist/
 .DS_Store
 Thumbs.db
 
+# E2E recordings
+e2e/recordings/
+
 # AI tools
 .gemini/
 status/
