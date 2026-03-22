@@ -30,6 +30,11 @@ bash e2e/run.sh
 
 # 静的解析
 go vet ./...
+
+# リリース（ローカル実行）
+git tag v<version>
+git push origin v<version>
+GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
 ```
 
 ## Architecture
