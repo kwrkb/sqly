@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwrkb/asql/internal/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,7 +69,7 @@ func Save(profiles []Profile) error {
 		return fmt.Errorf("marshaling profiles: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := fsutil.AtomicWrite(path, data, 0o600); err != nil {
 		return fmt.Errorf("writing profiles: %w", err)
 	}
 	return nil

@@ -36,8 +36,7 @@ func (m model) updateInsert(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.Type {
 	case tea.KeyTab:
-		m.triggerCompletion()
-		return m, nil
+		return m, m.triggerCompletion()
 	case tea.KeyEsc:
 		m.mode = normalMode
 		m.textarea.Blur()
