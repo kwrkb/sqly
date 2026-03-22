@@ -2,6 +2,7 @@ package profile
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -68,10 +69,32 @@ func Save(profiles []Profile) error {
 		return fmt.Errorf("marshaling profiles: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := atomicWrite(path, data, 0o600); err != nil {
 		return fmt.Errorf("writing profiles: %w", err)
 	}
 	return nil
+}
+
+func atomicWrite(path string, data []byte, perm fs.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // Upsert adds or replaces a profile in a slice of profiles.

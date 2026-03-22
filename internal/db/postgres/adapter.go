@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
@@ -24,10 +25,16 @@ func Open(dsn string) (*Adapter, error) {
 		return nil, err
 	}
 
-	if err := conn.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := conn.PingContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
+
+	conn.SetMaxOpenConns(5)
+	conn.SetMaxIdleConns(2)
+	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	return &Adapter{conn: conn}, nil
 }
@@ -118,7 +125,7 @@ func (a *Adapter) buildCreateTable(ctx context.Context, tableName string) (strin
 		if err := rows.Scan(&name, &dataType, &nullable, &defaultVal); err != nil {
 			return "", err
 		}
-		col := fmt.Sprintf("  %s %s", name, dataType)
+		col := fmt.Sprintf("  %s %s", a.QuoteIdentifier(name), dataType)
 		if nullable == "NO" {
 			col += " NOT NULL"
 		}
@@ -131,7 +138,7 @@ func (a *Adapter) buildCreateTable(ctx context.Context, tableName string) (strin
 		return "", err
 	}
 
-	quoted := `"` + strings.ReplaceAll(tableName, `"`, `""`) + `"`
+	quoted := a.QuoteIdentifier(tableName)
 	if len(cols) == 0 {
 		return fmt.Sprintf("CREATE TABLE %s ()", quoted), nil
 	}

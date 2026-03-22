@@ -61,6 +61,7 @@ type completionState struct {
 	cursor   int
 	prefix   string
 	colCache map[string][]string
+	colOrder []string // LRU order: most recently used at end
 }
 
 // sidebarState holds state for the table-list sidebar (SIDEBAR mode).

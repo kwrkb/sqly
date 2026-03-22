@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -186,7 +187,8 @@ func filterByPrefix(items []string, prefix string) []string {
 }
 
 // triggerCompletion collects completion candidates based on cursor context.
-func (m *model) triggerCompletion() {
+// Returns a tea.Cmd if an async column fetch is needed, nil otherwise.
+func (m *model) triggerCompletion() tea.Cmd {
 	text := m.textarea.Value()
 	row := m.textarea.Line()
 	charOffset := m.textarea.LineInfo().CharOffset
@@ -202,40 +204,52 @@ func (m *model) triggerCompletion() {
 	ctx := detectContext(text, startPos)
 
 	var candidates []string
+	var fetchCmd tea.Cmd
 	switch ctx {
 	case contextTable:
 		candidates = filterByPrefix(m.sidebar.tables, filterPrefix)
 	case contextColumn:
 		tableName := detectTableFromContext(text, prefix, m.sidebar.tables)
 		if tableName != "" {
-			cols := m.getOrFetchColumns(tableName)
+			cols, cmd := m.getOrFetchColumns(tableName)
+			if cmd != nil {
+				return cmd
+			}
 			candidates = filterByPrefix(cols, filterPrefix)
 		} else {
 			// Gather columns from all known tables
-			candidates = m.allColumns(filterPrefix)
+			var cmd tea.Cmd
+			candidates, cmd = m.allColumns(filterPrefix)
+			fetchCmd = cmd
 		}
 	default:
 		// Unknown context: offer both tables and columns
 		candidates = filterByPrefix(m.sidebar.tables, filterPrefix)
-		colCandidates := m.allColumns(filterPrefix)
+		colCandidates, cmd := m.allColumns(filterPrefix)
+		fetchCmd = cmd
 		candidates = append(candidates, colCandidates...)
 		candidates = dedup(candidates)
 	}
 
+	if fetchCmd != nil {
+		return fetchCmd
+	}
+
 	if len(candidates) == 0 {
-		return
+		return nil
 	}
 
 	if len(candidates) == 1 {
 		// Single candidate: insert immediately
 		m.insertCompletion(candidates[0], prefix)
-		return
+		return nil
 	}
 
 	m.completion.active = true
 	m.completion.items = candidates
 	m.completion.cursor = 0
 	m.completion.prefix = prefix
+	return nil
 }
 
 // acceptCompletion inserts the currently selected completion candidate.
@@ -271,41 +285,50 @@ func (m *model) closeCompletion() {
 	m.completion.prefix = ""
 }
 
-// getOrFetchColumns returns cached columns or fetches them synchronously.
-func (m *model) getOrFetchColumns(tableName string) []string {
+// getOrFetchColumns returns cached columns synchronously, or fires an async
+// Cmd to fetch them. When a Cmd is returned, columns will arrive via columnsLoadedMsg.
+func (m *model) getOrFetchColumns(tableName string) ([]string, tea.Cmd) {
 	if m.completion.colCache == nil {
 		m.completion.colCache = make(map[string][]string)
 	}
 	if cols, ok := m.completion.colCache[tableName]; ok {
-		return cols
+		m.colCacheTouch(tableName)
+		return cols, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	cols, err := m.activeDB().Columns(ctx, tableName)
-	if err != nil {
-		return nil
+	// Fetch asynchronously to avoid blocking the UI
+	adapter := m.activeDB()
+	return nil, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		cols, err := adapter.Columns(ctx, tableName)
+		return columnsLoadedMsg{table: tableName, columns: cols, err: err}
 	}
-	// Cap cache size to prevent unbounded growth
-	const maxColCacheSize = 64
-	if len(m.completion.colCache) >= maxColCacheSize {
-		// Evict one random entry to make space
-		for k := range m.completion.colCache {
-			delete(m.completion.colCache, k)
+}
+
+// colCacheTouch moves tableName to the end of the LRU order.
+func (m *model) colCacheTouch(tableName string) {
+	for i, name := range m.completion.colOrder {
+		if name == tableName {
+			m.completion.colOrder = append(m.completion.colOrder[:i], m.completion.colOrder[i+1:]...)
 			break
 		}
 	}
-	m.completion.colCache[tableName] = cols
-	return cols
+	m.completion.colOrder = append(m.completion.colOrder, tableName)
 }
 
 // allColumns gathers columns from all known tables, filtered by prefix.
-func (m *model) allColumns(prefix string) []string {
+// Returns a cmd if any table's columns need async fetching.
+func (m *model) allColumns(prefix string) ([]string, tea.Cmd) {
 	var all []string
 	for _, t := range m.sidebar.tables {
-		cols := m.getOrFetchColumns(t)
+		cols, cmd := m.getOrFetchColumns(t)
+		if cmd != nil {
+			// Start fetching; re-trigger will happen on columnsLoadedMsg
+			return nil, cmd
+		}
 		all = append(all, filterByPrefix(cols, prefix)...)
 	}
-	return dedup(all)
+	return dedup(all), nil
 }
 
 func dedup(items []string) []string {

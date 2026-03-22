@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -27,10 +28,16 @@ func Open(dsn string) (*Adapter, error) {
 		return nil, err
 	}
 
-	if err := conn.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := conn.PingContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
+
+	conn.SetMaxOpenConns(5)
+	conn.SetMaxIdleConns(2)
+	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	return &Adapter{conn: conn}, nil
 }

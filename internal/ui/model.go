@@ -77,6 +77,12 @@ type connSwitchedMsg struct {
 	reExecute bool
 }
 
+type columnsLoadedMsg struct {
+	table   string
+	columns []string
+	err     error
+}
+
 type model struct {
 	// Connection
 	connMgr  *connManager
@@ -357,6 +363,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dbPath = db.MaskDSN(m.connMgr.ActiveDSN())
 		m.rawDSN = m.connMgr.ActiveDSN()
 		m.completion.colCache = nil
+		m.completion.colOrder = nil
 		m.sidebar.tables = nil
 		m.setStatus(fmt.Sprintf("Connected to %s", sanitize(m.connMgr.ActiveName())), false)
 		m.mode = normalMode
@@ -369,11 +376,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, loadTablesCmd(m.connMgr.Active())
 	case tablesLoadedMsg:
-		if msg.err == nil {
-			m.sidebar.tables = msg.tables
-			m.completion.colCache = nil // invalidate column cache
-			if m.sidebar.cursor >= len(msg.tables) {
-				m.sidebar.cursor = max(len(msg.tables)-1, 0)
+		if msg.err != nil {
+			m.setStatus("Failed to load tables: "+msg.err.Error(), true)
+			return m, nil
+		}
+		m.sidebar.tables = msg.tables
+		m.completion.colCache = nil
+		m.completion.colOrder = nil // invalidate column cache
+		if m.sidebar.cursor >= len(msg.tables) {
+			m.sidebar.cursor = max(len(msg.tables)-1, 0)
+		}
+		return m, nil
+	case columnsLoadedMsg:
+		if msg.err == nil && msg.columns != nil {
+			if m.completion.colCache == nil {
+				m.completion.colCache = make(map[string][]string)
+			}
+			const maxColCacheSize = 64
+			if len(m.completion.colCache) >= maxColCacheSize && len(m.completion.colOrder) > 0 {
+				evict := m.completion.colOrder[0]
+				m.completion.colOrder = m.completion.colOrder[1:]
+				delete(m.completion.colCache, evict)
+			}
+			m.completion.colCache[msg.table] = msg.columns
+			m.completion.colOrder = append(m.completion.colOrder, msg.table)
+			// Re-trigger completion now that columns are cached
+			if m.mode == insertMode {
+				return m, m.triggerCompletion()
 			}
 		}
 		return m, nil
@@ -682,6 +711,20 @@ func (m *model) syncViewport() {
 
 // sanitize strips ANSI escape sequences and control characters from s.
 func sanitize(s string) string {
+	// Fast path: if no escape characters exist, return as-is
+	if !strings.ContainsRune(s, '\x1b') {
+		clean := true
+		for i := 0; i < len(s); i++ {
+			if s[i] < 0x20 && s[i] != '\t' {
+				clean = false
+				break
+			}
+		}
+		if clean {
+			return s
+		}
+	}
+
 	var b strings.Builder
 	b.Grow(len(s))
 	i := 0

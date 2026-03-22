@@ -2,6 +2,7 @@ package snippet
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -68,8 +69,30 @@ func Save(snippets []Snippet) error {
 		return fmt.Errorf("marshaling snippets: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := atomicWrite(path, data, 0o600); err != nil {
 		return fmt.Errorf("writing snippets: %w", err)
 	}
 	return nil
+}
+
+func atomicWrite(path string, data []byte, perm fs.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
