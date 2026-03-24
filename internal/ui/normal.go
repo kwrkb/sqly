@@ -39,6 +39,14 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.exportSt.cursor = 0
 				m.setStatus("Export mode", false)
 			}
+		case "d":
+			if len(m.lastResult.Columns) > 0 && len(m.lastResult.Rows) > 0 {
+				m.statsSt.cursor = 0
+				m.statsSt.scroll = 0
+				m.statsSt.stats = computeColumnStats(m.lastResult)
+				m.mode = statsMode
+				m.setStatus("Stats mode", false)
+			}
 		case "c":
 			if m.pinned != nil {
 				// Toggle off

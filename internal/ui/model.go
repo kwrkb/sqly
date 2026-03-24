@@ -33,6 +33,7 @@ const (
 	snippetMode       mode = "SNIPPET"
 	historySearchMode mode = "SEARCH"
 	profileMode       mode = "PROFILE"
+	statsMode         mode = "STATS"
 
 	queryTimeout       = 5 * time.Second
 	sidebarWidth       = 25
@@ -142,6 +143,7 @@ type model struct {
 	histSearch histSearchState
 	completion completionState
 	sidebar    sidebarState
+	statsSt    statsState
 }
 
 // CloseAll closes all database connections managed by this model.
@@ -314,6 +316,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateProfile(msg)
 		case historySearchMode:
 			return m.updateHistorySearch(msg)
+		case statsMode:
+			return m.updateStats(msg)
 		}
 	case aiResponseMsg:
 		if msg.seq != m.querySeq {
@@ -515,6 +519,10 @@ func (m model) View() string {
 
 	if m.mode == historySearchMode {
 		view = m.renderWithHistorySearchOverlay(view)
+	}
+
+	if m.mode == statsMode {
+		view = m.renderWithStatsOverlay(view)
 	}
 
 	if m.mode == profileMode {
