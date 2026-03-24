@@ -71,3 +71,21 @@ type sidebarState struct {
 	tables []string
 	cursor int
 }
+
+// columnStat holds computed statistics for a single column.
+type columnStat struct {
+	Name     string
+	Type     string
+	NullCnt  int
+	NullRate float64
+	Distinct int
+	Min      string
+	Max      string
+}
+
+// statsState holds state for the column-statistics overlay (STATS mode).
+type statsState struct {
+	cursor int
+	scroll int
+	stats  []columnStat
+}
