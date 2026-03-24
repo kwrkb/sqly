@@ -20,7 +20,9 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - Phase 1 Core Observation UX 全完了 (P0 + P1)
 - Phase 2 Multi-DB: 複数接続同時保持 (2-1)、同一クエリ別DB実行 (2-2)、横並び表示 (2-3) 完了
 - CLI: `--help` / `--version`、README 整備済み (v0.6.0)
-- **次: Phase 4 Light Insight Helpers**
+- テストカバレッジ拡充 (Issue #14, PR #35): MySQL/PostgreSQL アダプタ + UI (insert/sidebar/profile) テスト追加完了
+- Phase 4 着手: 4-1/4-2/4-3 Column Statistics Overlay (PR #36)
+- **次: Phase 4 残タスク (4-4, 4-5) または Phase 3**
 
 ## Phase 2: Multi-DB Observation — 比較の完成（最優先）
 
@@ -36,9 +38,9 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 目的：**「軽さを損なわない範囲で、気づきを増やす」**。
 比較観察と相性が良い。Phase 2 完了後に着手。
 
-- [ ] 4-1. NULL率表示
-- [ ] 4-2. distinct数表示
-- [ ] 4-3. min/max表示
+- [x] 4-1. NULL率表示 (PR #36: `d` キーで Stats overlay)
+- [x] 4-2. distinct数表示 (PR #36: 同上)
+- [x] 4-3. min/max表示 (PR #36: 同上)
 - [ ] 4-4. 件数推移の簡易表示 (スパークライン等)
 - [ ] 4-5. 簡易ヒストグラム表示 (将来)
 

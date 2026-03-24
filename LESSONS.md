@@ -411,6 +411,100 @@ func configDir() (string, error) {
 }
 ```
 
+### Markdown テーブルに改行文字を含むセルがあるとレイアウトが崩れる
+
+**文脈**: `FormatMarkdown` でセル値の `|` はエスケープしていたが、`\n` / `\r\n` を処理していなかった。改行を含むセル（TEXT カラム等）があるとテーブル行が分断されて壊れた。
+
+**学び**: Markdown テーブルは1行1レコードが前提。セル値に含まれる改行（`\r\n`, `\n`, `\r`）はスペースに置換してからパイプエスケープを行う。
+
+**パターン**:
+```go
+escape := func(s string) string {
+    s = strings.ReplaceAll(s, "\r\n", " ")
+    s = strings.ReplaceAll(s, "\n", " ")
+    s = strings.ReplaceAll(s, "\r", " ")
+    return strings.ReplaceAll(s, "|", "\\|")
+}
+```
+
+### エクスポートファイルのパーミッションは 0600、タイムスタンプはミリ秒精度
+
+**文脈**: `SaveCSVFile` が `0644` でファイルを書き込み、タイムスタンプが秒精度（`20060102_150405`）だったため、(1) 他ユーザーに読まれるリスク、(2) 1秒以内の連続エクスポートでファイル上書きのリスクがあった。
+
+**学び**: クエリ結果にはセンシティブなデータが含まれうるため、エクスポートファイルのパーミッションは `0600`（owner only）にする。ファイル名のタイムスタンプはミリ秒まで含めて衝突を防ぐ。
+
+**パターン**:
+```go
+filename := fmt.Sprintf("result_%s.csv", time.Now().Format("20060102_150405.000"))
+os.WriteFile(filename, data, 0600)
+```
+
+---
+
+## リファクタリングパターン
+
+### Bubble Tea の model 肥大化にはモード別状態構造体を抽出する
+
+**文脈**: `model` 構造体に `detailFieldCursor`, `detailScroll`, `exportCursor`, `aiInput`, `aiLoading`, `aiError`, `completionActive`, `completionItems`, `completionCursor`, `completionPrefix`, `completionColCache`, `historySearchInput`, `historySearchResults`, `historySearchCursor`, `sidebarTables`, `sidebarCursor` 等が直接並んでおり、30 以上のフィールドになっていた。
+
+**学び**: モードごとに関連するフィールドを構造体にグループ化すると、(1) model 定義の見通しが良くなる、(2) 名前の衝突を防げる（`cursor` が各モードにある）、(3) 初期化・リセットが構造体のゼロ値で済む。
+
+**パターン**: `states.go` にモード別の状態構造体を定義し、model にはネストで持たせる:
+```go
+// states.go
+type detailState struct { fieldCursor, scroll int }
+type exportState struct { cursor int }
+type completionState struct { active bool; items []string; cursor int; ... }
+
+// model.go
+type model struct {
+    detail     detailState
+    exportSt   exportState
+    completion completionState
+    // ...
+}
+```
+
+### 重複するオーバーレイ描画は共通ヘルパーに抽出する
+
+**文脈**: AI / Detail / Export / HistorySearch の各オーバーレイで `calcModalWidth` と `lipgloss.Place(...)` の呼び出しが4箇所に重複していた。幅計算のクランプ値（最小20）やセンタリングの `WithWhitespaceBackground` 設定がバラバラになるリスクがあった。
+
+**学び**: 複数のオーバーレイで共通する「幅計算」と「背景上にセンタリング配置」は小さなヘルパー関数に抽出する。コード量は少ないが、一貫性の保証とバグの一箇所修正が目的。
+
+**パターン**: `overlay.go` に2つの関数を置く:
+```go
+func calcModalWidth(screenWidth, maxWidth int) int {
+    w := min(screenWidth-4, maxWidth)
+    if w < 20 { w = 20 }
+    return w
+}
+
+func overlayModal(screenWidth int, background, modal string) string {
+    bgH := lipgloss.Height(background)
+    return lipgloss.Place(screenWidth, bgH, lipgloss.Center, lipgloss.Center, modal,
+        lipgloss.WithWhitespaceBackground(appBackground))
+}
+```
+
+### カーソル移動の境界チェックは汎用ヘルパーで統一する
+
+**文脈**: Export / Detail / Sidebar / Snippet / Profile の各モードで `if cursor < len(items)-1 { cursor++ }` / `if cursor > 0 { cursor-- }` が10箇所以上に重複していた。一部では `>= 0` と `> 0` の不一致や、空リストでの off-by-one リスクがあった。
+
+**学び**: カーソル移動は「位置 + リスト長 + 方向」だけで決まる純粋な操作なので、1つの関数に統合できる。ポインタ渡しにすれば呼び出し側は1行で済む。
+
+**パターン**:
+```go
+func moveCursor(cursor *int, length int, direction int) {
+    n := *cursor + direction
+    if n >= 0 && n < length {
+        *cursor = n
+    }
+}
+// 使用: moveCursor(&m.exportSt.cursor, len(exportOptions), 1)
+```
+
+---
+
 ### 秘密情報を含む設定ファイルは環境変数オーバーライドとパーミッションチェックを入れる
 
 **文脈**: `config.yaml` に AI API キーが平文保存されていた。環境変数からの読み取り手段がなく、CI やコンテナ環境で不便。
@@ -433,5 +527,67 @@ if err != nil {
 }
 // ファイル不在は os.IsNotExist で判定して nil error を返す
 ```
+
+---
+
+## 非同期処理と接続管理 (2026-03-22)
+
+### 非同期フェッチ結果には接続世代トークンを含める
+- DB 接続切替中に非同期カラムフェッチが in-flight の場合、旧接続の応答が新接続のキャッシュを汚染する
+- **ルール**: 非同期メッセージには `connGen uint64` を含め、ハンドラ側で `msg.connGen != m.connGen` なら破棄する。接続切替時に `connGen++` する
+
+### 非同期応答での自動挿入は発行時のコンテキストを検証してから行う
+- 非同期カラムフェッチの応答で `triggerCompletion()` を再実行すると、ユーザーが既にカーソルを移動していても single candidate の自動挿入が走り、意図しないテキスト変更が起きる
+- **ルール**: 非同期フェッチ発行時に `pendingPrefix` を保存し、応答到着時にカーソル位置の prefix が一致する場合のみ re-trigger する。不一致なら `pendingPrefix` をクリアして無視
+
+### 重複ユーティリティ関数は共通パッケージに切り出す
+- `atomicWrite` が `profile.go` と `snippet.go` に全く同一のコードで重複していた。一方の修正がもう一方に反映されないリスク
+- **ルール**: 2つ以上のパッケージで同一ロジックが必要な場合は `internal/` 配下に共通パッケージ（例: `fsutil`）を作り、テスト付きで切り出す
+
+### SQLite の MaxOpenConns は 1 にする
+- SQLite はシングルライターアーキテクチャ。`MaxOpenConns(5)` は他 DB アダプタからのコピペで設定されていたが、SQLite では不適切
+- **ルール**: DB アダプタの接続プール設定はデータベースの特性に合わせる。SQLite は `MaxOpenConns(1)`, `MaxIdleConns(1)`
+
+---
+
+## Issue 対応とリファクタリング (2026-03-24)
+
+### Issue 着手前に実装状況をコードで確認する
+- Issue #16（DSN セキュリティ）を開いたところ、提案の3項目（環境変数・プロファイル・対話的入力）がすでに実装済みだった。コードを読まずに実装に入ると無駄な重複が生じる
+- **ルール**: Issue に着手する前に、提案された機能がすでに存在しないか `grep` / `Explore` で確認する。既に実装済みであればコメント付きでクローズする
+
+### model.go の分割は「モード別」より「責務別」が残りの軸になる
+- Issue #13 が提案した「モード別分割」（normal.go, insert.go 等）はすでに完了済みだった。残った model.go（907行）は共通インフラのみで、さらに「責務別」に分割できた
+- **ルール**: 大きなファイルを分割する際、モード/機能ごとの分割が完了したら次は「責務」軸で見直す。`sanitize.go`（純粋関数）・`query.go`（実行ヘルパー）・`result.go`（ビューポート管理）のような軸が有効
+- **パターン**: 分割後のファイルが「単一の関心ごとを持つ」かチェックする。model 依存のない純粋関数は独立性が高く低リスクで移動できる
+
+### 関数を別ファイルへ移動した後は移動元の import を精査する
+- `dbutil` を使う関数を `result.go` に移したあと、`model.go` の import に `dbutil` が残りビルドエラーになった
+- **ルール**: 関数を別ファイルへ移動したら、移動元ファイルの import を全行レビューし、使われなくなったものを削除する。`go build` が即座に検出するので、各ステップ後に必ず実行する
+
+---
+
+## テストカバレッジ拡充 (2026-03-25)
+
+### UI テストでは状態遷移の複数ステップを t.Run サブテストに分割する
+- `TestInsert_CtrlPNavigatesHistoryBack` で `*m = result` パターンで複数ステップを直列にテストしていたが、Gemini レビューで `t.Run` サブテスト化を指摘された
+- **ルール**: 1つのテスト関数内で複数の状態遷移をテストする場合、各ステップを `t.Run` で分割する。失敗時にどのステップで問題が起きたか即座に特定できる
+- **パターン**: 境界チェックテスト（CursorBoundary）も「上端」「下端」を別サブテストにする
+
+### AI コードレビューの重複レビュー判定は慎重に
+- PR #35 に gemini-code-assist のレビューが既にある状態で Claude Code レビューを実行した。適格性チェックで「既にAIレビューあり→スキップ」と判定されたが、異なるAIの視点は補完的であり、ユーザーが明示的にレビューを依頼した場合はスキップすべきでない
+- **ルール**: `/code-review` をユーザーが明示的に呼んだ場合は、既存のbot レビュー有無に関係なく実行する
+
+---
+
+## Column Statistics 機能 (2026-03-25)
+
+### 複数の軽量機能は1つのオーバーレイにまとめて実装する
+- Phase 4 の 4-1 (NULL率), 4-2 (distinct数), 4-3 (min/max) を個別に実装するより、1つの Stats overlay にまとめた方がユーザー体験が良い
+- **ルール**: 同じデータソース（クエリ結果）に対する複数の統計指標は、個別UIではなく1画面にまとめる。1キー (`d`) で全情報にアクセスできる
+
+### インメモリ計算 vs DBクエリの判断基準
+- Stats 機能で DB に `SELECT COUNT(DISTINCT col), ...` を投げる案と、`lastResult.Rows` からインメモリ計算する案を比較した
+- **ルール**: TUI に既にデータがロード済みなら、インメモリ計算を優先する。理由: (1) DBラウンドトリップ不要で即座に表示、(2) 任意のクエリ結果に対して動作（テーブル名不要）、(3) 接続切断後も動作する
 
 ---
