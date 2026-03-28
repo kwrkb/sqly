@@ -48,6 +48,11 @@ func computeColumnStats(result db.QueryResult) []columnStat {
 		if rowCount > 0 {
 			s.NullRate = float64(s.NullCnt) / float64(rowCount)
 		}
+
+		if detectDateColumn(s.Type) || looksLikeDate(result.Rows, i) {
+			s.Sparkline = computeSparkline(result.Rows, i)
+		}
+
 		stats[i] = s
 	}
 	return stats
@@ -130,6 +135,10 @@ func (m model) renderWithStatsOverlay(background string) string {
 	b.WriteByte('\n')
 
 	maxVisible := max(m.height-10, 3)
+	// Reserve one line for sparkline if the cursor row has one.
+	if m.statsSt.cursor < len(stats) && stats[m.statsSt.cursor].Sparkline.Bars != "" {
+		maxVisible = max(maxVisible-1, 2)
+	}
 	rowFmt := fmt.Sprintf("%%s %%-%ds  %%-%ds  %%6s  %%8d  %%s", nameW, typeW)
 	end := min(m.statsSt.scroll+maxVisible, len(stats))
 
@@ -163,6 +172,15 @@ func (m model) renderWithStatsOverlay(background string) string {
 			line = lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render(line)
 		}
 		b.WriteString(line)
+
+		if i == m.statsSt.cursor && s.Sparkline.Bars != "" {
+			b.WriteByte('\n')
+			indent := strings.Repeat(" ", nameW+typeW+7)
+			spark := lipgloss.NewStyle().Foreground(lipgloss.Color(accentColor)).Render(s.Sparkline.Bars)
+			lbl := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedTextColor)).Render("  " + s.Sparkline.Label)
+			b.WriteString(indent + spark + lbl)
+		}
+
 		if i < end-1 {
 			b.WriteByte('\n')
 		}
