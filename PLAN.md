@@ -21,8 +21,8 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - Phase 2 Multi-DB: 複数接続同時保持 (2-1)、同一クエリ別DB実行 (2-2)、横並び表示 (2-3) 完了
 - CLI: `--help` / `--version`、README 整備済み (v0.6.0)
 - テストカバレッジ拡充 (Issue #14, PR #35): MySQL/PostgreSQL アダプタ + UI (insert/sidebar/profile) テスト追加完了
-- Phase 4 着手: 4-1/4-2/4-3 Column Statistics Overlay (PR #36)
-- **次: Phase 4 残タスク (4-4, 4-5) または Phase 3**
+- Phase 4 着手: 4-1/4-2/4-3 Column Statistics Overlay (PR #36)、4-4 Sparkline (PR #38)
+- **次: Phase 4-5 (ヒストグラム) または Phase 3**
 
 ## 作業中: v0.8.0 VHS / E2E 更新
 
@@ -76,7 +76,7 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - [x] 4-1. NULL率表示 (PR #36: `d` キーで Stats overlay)
 - [x] 4-2. distinct数表示 (PR #36: 同上)
 - [x] 4-3. min/max表示 (PR #36: 同上)
-- [ ] 4-4. 件数推移の簡易表示 (スパークライン等)
+- [x] 4-4. 件数推移の簡易表示 (PR #38: Stats overlay でカーソル行にスパークライン表示)
 - [ ] 4-5. 簡易ヒストグラム表示 (将来)
 
 ## Phase 3: Bring & Join（後回し）
