@@ -347,8 +347,8 @@ func ShortenTypeName(typeName string) string {
 
 // Dialect controls which quoting styles the SQL scanner recognizes.
 type Dialect struct {
-	BracketQuote bool // SQLite/MSSQL [identifier] style
-	DollarQuote  bool // PostgreSQL $$string$$ style
+	BracketQuote  bool // SQLite/MSSQL [identifier] style
+	DollarQuote   bool // PostgreSQL $$string$$ style
 	BacktickQuote bool // SQLite/MySQL `identifier` style
 }
 
