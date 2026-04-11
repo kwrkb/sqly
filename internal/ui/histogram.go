@@ -10,20 +10,40 @@ import (
 const maxHistogramBuckets = 20
 const maxHistogramRows = 10_000
 
+// numericTypeKeywords lists SQL type keywords that indicate a numeric column.
+// Matched as word prefixes to avoid false positives (e.g. "INTERVAL" matching "int").
+var numericTypeKeywords = []string{
+	"int", "integer", "bigint", "smallint", "tinyint", "mediumint",
+	"real", "float", "double", "decimal", "numeric", "number",
+}
+
 // detectNumericColumn returns true if the column type string suggests a numeric type.
+// Uses word-boundary matching to avoid false positives like INTERVAL or POINT.
 func detectNumericColumn(colType string) bool {
 	lower := strings.ToLower(colType)
-	for _, kw := range []string{"int", "real", "float", "double", "decimal", "numeric", "number"} {
-		if strings.Contains(lower, kw) {
-			return true
+	for _, kw := range numericTypeKeywords {
+		idx := strings.Index(lower, kw)
+		if idx < 0 {
+			continue
 		}
+		// Check left boundary: start of string, space, or '('
+		if idx > 0 && lower[idx-1] != ' ' && lower[idx-1] != '(' {
+			continue
+		}
+		// Check right boundary: end of string, space, '(', or ')'
+		end := idx + len(kw)
+		if end < len(lower) && lower[end] != ' ' && lower[end] != '(' && lower[end] != ')' {
+			continue
+		}
+		return true
 	}
 	return false
 }
 
-// looksLikeNumeric checks the first few non-null values to see if they parse as float64.
+// looksLikeNumeric checks the first non-null value to see if it parses as float64.
+// Mirrors looksLikeDate: a single-sample heuristic; computeHistogram's 50% threshold
+// handles mixed-type columns downstream.
 func looksLikeNumeric(rows [][]string, colIdx int) bool {
-	checked := 0
 	for _, row := range rows {
 		if colIdx >= len(row) {
 			continue
@@ -32,15 +52,10 @@ func looksLikeNumeric(rows [][]string, colIdx int) bool {
 		if val == "NULL" {
 			continue
 		}
-		if _, err := strconv.ParseFloat(val, 64); err != nil {
-			return false
-		}
-		checked++
-		if checked >= 3 {
-			break
-		}
+		_, err := strconv.ParseFloat(val, 64)
+		return err == nil
 	}
-	return checked > 0
+	return false
 }
 
 // computeHistogram scans a numeric column, buckets values into equal-width bins,

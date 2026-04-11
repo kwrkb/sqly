@@ -29,6 +29,9 @@ func TestDetectNumericColumn(t *testing.T) {
 		{"DATE", false},
 		{"TIMESTAMP", false},
 		{"BLOB", false},
+		{"INTERVAL", false},   // must not match "int" substring
+		{"POINT", false},      // must not match "int" substring
+		{"interval", false},
 		{"", false},
 	}
 
@@ -104,8 +107,14 @@ func TestLooksLikeNumeric(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "mixed: first is numeric, second is not",
+			name:   "first is numeric even if later values are not",
 			rows:   [][]string{{"42"}, {"N/A"}, {"100"}},
+			colIdx: 0,
+			want:   true,
+		},
+		{
+			name:   "first non-NULL is not numeric",
+			rows:   [][]string{{"N/A"}, {"42"}, {"100"}},
 			colIdx: 0,
 			want:   false,
 		},
