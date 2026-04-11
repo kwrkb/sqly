@@ -54,6 +54,8 @@ func computeColumnStats(result db.QueryResult) []columnStat {
 
 		if detectDateColumn(s.Type) || looksLikeDate(result.Rows, i) {
 			s.Sparkline = computeSparkline(result.Rows, i)
+		} else if detectNumericColumn(s.Type) || looksLikeNumeric(result.Rows, i) {
+			s.Histogram = computeHistogram(result.Rows, i)
 		}
 
 		stats[i] = s
@@ -99,11 +101,16 @@ func (m model) updateStats(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // statsMaxVisible returns the number of stat rows visible in the overlay,
-// accounting for the extra sparkline line when the cursor row has one.
+// accounting for the extra line when the cursor row has a sparkline or histogram.
 func (m model) statsMaxVisible() int {
 	v := max(m.height-10, 3)
-	if m.statsSt.cursor < len(m.statsSt.stats) && (m.statsSt.stats[m.statsSt.cursor].Sparkline.Bars != "" || m.statsSt.stats[m.statsSt.cursor].Sparkline.Skipped) {
-		v = max(v-1, 2)
+	if m.statsSt.cursor < len(m.statsSt.stats) {
+		s := m.statsSt.stats[m.statsSt.cursor]
+		hasExtra := s.Sparkline.Bars != "" || s.Sparkline.Skipped ||
+			s.Histogram.Bars != "" || s.Histogram.Skipped
+		if hasExtra {
+			v = max(v-1, 2)
+		}
 	}
 	return v
 }
@@ -207,6 +214,20 @@ func (m model) renderWithStatsOverlay(background string) string {
 				b.WriteString(indent + spark + lbl)
 			} else {
 				msg := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedTextColor)).Render("(sparkline skipped: >10k rows)")
+				b.WriteString(indent + msg)
+			}
+		}
+
+		if i == m.statsSt.cursor && (s.Histogram.Bars != "" || s.Histogram.Skipped) {
+			b.WriteByte('\n')
+			// same indent as sparkline: aligns under the NULL% column.
+			indent := strings.Repeat(" ", nameW+typeW+7)
+			if s.Histogram.Bars != "" {
+				hist := lipgloss.NewStyle().Foreground(lipgloss.Color(accentColor)).Render(s.Histogram.Bars)
+				lbl := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedTextColor)).Render("  " + s.Histogram.Label)
+				b.WriteString(indent + hist + lbl)
+			} else {
+				msg := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedTextColor)).Render("(histogram skipped: >10k rows)")
 				b.WriteString(indent + msg)
 			}
 		}
