@@ -79,6 +79,13 @@ type sparklineData struct {
 	Skipped bool   // true if computation was skipped (e.g. too many rows)
 }
 
+// histogramData holds pre-computed histogram information for a numeric column.
+type histogramData struct {
+	Bars    string // rendered histogram string (e.g. "▁▂▅█▇▃▁")
+	Label   string // range label (e.g. "0–100")
+	Skipped bool   // true if computation was skipped (e.g. too many rows)
+}
+
 // columnStat holds computed statistics for a single column.
 type columnStat struct {
 	Name      string
@@ -88,7 +95,8 @@ type columnStat struct {
 	Distinct  int
 	Min       string
 	Max       string
-	Sparkline sparklineData // non-empty only for date/timestamp columns
+	Sparkline sparklineData  // non-empty only for date/timestamp columns
+	Histogram histogramData  // non-empty only for numeric columns
 }
 
 // statsState holds state for the column-statistics overlay (STATS mode).
