@@ -50,7 +50,9 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) renderWithDetailOverlay(background string) string {
 	modalWidth := calcModalWidth(m.width, 72)
-	modalHeight := m.height - 6
+	// boxStyle below applies a rounded border (adds 2 rows) on top of Height(modalHeight).
+	// Cap modalHeight to m.height-2 so the rendered modal never overflows the screen.
+	modalHeight := max(m.height-2, 1)
 
 	// Use displayRows (full columns) instead of m.table.Rows() (windowed)
 	sourceRows := m.displayRows
@@ -74,7 +76,7 @@ func (m model) renderWithDetailOverlay(background string) string {
 
 	valueStyle := lipgloss.NewStyle().
 		Foreground(textColor).
-		Width(modalWidth - 6)
+		Width(max(modalWidth-6, 10))
 
 	selectedLabelStyle := lipgloss.NewStyle().
 		Foreground(accentColor).
@@ -83,13 +85,14 @@ func (m model) renderWithDetailOverlay(background string) string {
 	selectedValueStyle := lipgloss.NewStyle().
 		Foreground(textColor).
 		Background(lipgloss.Color("#1E293B")).
-		Width(modalWidth - 6)
+		Width(max(modalWidth-6, 10))
 
 	title := titleStyle.Render(fmt.Sprintf("Row %d/%d", rowIdx+1, totalRows))
 
 	// Calculate scroll offset so cursor stays visible
-	contentHeight := max(modalHeight-3, 1) // title + margins
-	linesPerField := 3                     // label line + value line + separator
+	// contentHeight: total modal height minus borders(2), padding(2), and title area(2)
+	contentHeight := max(modalHeight-6, 1)
+	linesPerField := 3 // label line + value line + separator
 	maxVisibleFields := max(contentHeight/linesPerField, 1)
 	if m.detail.fieldCursor >= m.detail.scroll+maxVisibleFields {
 		m.detail.scroll = m.detail.fieldCursor - maxVisibleFields + 1
