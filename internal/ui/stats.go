@@ -103,13 +103,15 @@ func (m model) updateStats(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // statsMaxVisible returns the number of stat rows visible in the overlay,
 // accounting for the extra line when the cursor row has a sparkline or histogram.
 func (m model) statsMaxVisible() int {
-	v := max(m.height-10, 3)
+	// Fixed overhead: border(2), padding(2), title(1), separator(1), header(1) = 7 lines.
+	available := max(m.height-7, 1)
+	v := available
 	if m.statsSt.cursor < len(m.statsSt.stats) {
 		s := m.statsSt.stats[m.statsSt.cursor]
 		hasExtra := s.Sparkline.Bars != "" || s.Sparkline.Skipped ||
 			s.Histogram.Bars != "" || s.Histogram.Skipped
 		if hasExtra {
-			v = max(v-1, 2)
+			v = max(v-1, 1)
 		}
 	}
 	return v

@@ -544,7 +544,10 @@ func (m model) View() string {
 		view = m.renderWithProfileOverlay(view)
 	}
 
-	return view
+	return lipgloss.NewStyle().
+		MaxHeight(m.height).
+		MaxWidth(m.width).
+		Render(view)
 }
 
 func (m *model) contentWidth() int {
@@ -590,15 +593,15 @@ func (m *model) resize() {
 	contentWidth := m.contentWidth() // half if compare active
 
 	m.textarea.SetWidth(max(fullWidth-4, 20))
-	m.textarea.SetHeight(max(editorHeight-2, 5))
+	m.textarea.SetHeight(max(editorHeight-2, 1))
 
 	if m.pinned != nil {
 		compareHeight := resultsHeight - 1 // subtract label row
-		m.table.SetHeight(max(compareHeight-4, 3))
-		m.pinned.table.SetHeight(max(compareHeight-4, 3))
+		m.table.SetHeight(max(compareHeight-4, 1))
+		m.pinned.table.SetHeight(max(compareHeight-4, 1))
 		m.pinned.viewportDirty = true
 	} else {
-		m.table.SetHeight(max(resultsHeight-4, 3))
+		m.table.SetHeight(max(resultsHeight-4, 1))
 	}
 	m.viewport.Width = contentWidth
 	m.viewport.Height = resultsHeight
@@ -608,13 +611,35 @@ func (m *model) resize() {
 }
 
 func (m *model) editorHeight() int {
-	available := max(m.height-1, 6)
-	return max(int(float64(available)*0.3), 7)
+	// Account for 1 status bar row and 2 JoinVertical newlines
+	available := max(m.height-3, 0)
+	if available <= 0 {
+		return 0
+	}
+	h := int(float64(available) * 0.3)
+	// On very small screens, ensure we don't exceed available height
+	// while still trying to provide at least some space for the editor.
+	if h < 3 && available >= 3 {
+		h = 3
+	} else if h < 1 {
+		h = 1
+	}
+	if h > available {
+		h = available
+	}
+	return h
 }
 
 func (m *model) resultsHeight() int {
-	available := max(m.height-1, 6)
-	return max(available-m.editorHeight(), 4)
+	available := max(m.height-3, 0)
+	if available <= 0 {
+		return 0
+	}
+	eh := m.editorHeight()
+	if eh >= available {
+		return 0
+	}
+	return available - eh
 }
 
 func (m *model) setStatus(text string, isError bool) {
