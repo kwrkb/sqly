@@ -639,3 +639,19 @@ if err != nil {
 - **ルール**: Codex を Claude Code から呼ぶ場合は worktree 分離を使わない。メインリポジトリのコンテキストで実行するか、worktree なしのサブエージェントで投げる
 
 ---
+
+## リリース運用 (2026-04-25)
+
+### goreleaser v2 では archives.format ではなく formats を使う
+- v0.10.0 リリース時に `format: tar.gz` / `format_overrides[].format: zip` で `DEPRECATED: archives.format should not be used anymore` の警告が出た。goreleaser v2 では `format` (単数) が `formats` (複数形・配列) に置き換わっている
+- **ルール**: `.goreleaser.yml` の archives は `formats: [tar.gz]` / `format_overrides[].formats: [zip]` で記述する。設定変更後は `goreleaser check` で deprecation を事前検証してからタグを切る
+
+### リリース前に PLAN.md / HISTORY.md を更新してから push & タグを切る
+- タグはコミットを指すので、PLAN/HISTORY が未コミットのままタグを打つとリリース成果物にドキュメントが含まれない。事前に `git status` クリーンを確認しないと後追い不可
+- **ルール**: リリース手順は (1) PLAN/HISTORY 更新→コミット→push、(2) `git status` クリーン確認、(3) `go vet ./... && go test ./...`、(4) `git tag -a vX.Y.Z -m "vX.Y.Z"` → `git push origin vX.Y.Z`、(5) `GITHUB_TOKEN=$(gh auth token) goreleaser release --clean` の順で固定する
+
+### goreleaser はシステムに無ければ go install で入れる
+- WSL/Linux 環境に goreleaser のバイナリは未配備で、apt にも公式パッケージはない
+- **ルール**: `go install github.com/goreleaser/goreleaser/v2@latest` で `$(go env GOPATH)/bin/goreleaser` に入る。`~/go/bin` が PATH に無ければ絶対パス `~/go/bin/goreleaser` で実行する
+
+---
