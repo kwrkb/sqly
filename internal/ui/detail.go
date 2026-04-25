@@ -50,17 +50,9 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) renderWithDetailOverlay(background string) string {
 	modalWidth := calcModalWidth(m.width, 72)
-	// modalHeight: try to leave some margin, but don't exceed screen and don't go too small
-	modalHeight := m.height - 2
-	if modalHeight < 8 && m.height >= 8 {
-		modalHeight = 8
-	}
-	if modalHeight > m.height {
-		modalHeight = m.height
-	}
-	if modalHeight < 1 {
-		modalHeight = 1
-	}
+	// boxStyle below applies a rounded border (adds 2 rows) on top of Height(modalHeight).
+	// Cap modalHeight to m.height-2 so the rendered modal never overflows the screen.
+	modalHeight := max(m.height-2, 1)
 
 	// Use displayRows (full columns) instead of m.table.Rows() (windowed)
 	sourceRows := m.displayRows

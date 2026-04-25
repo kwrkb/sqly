@@ -617,15 +617,15 @@ func (m *model) editorHeight() int {
 		return 0
 	}
 	h := int(float64(available) * 0.3)
-	// On very small screens, ensure we don't exceed available height
-	// while still trying to provide at least some space for the editor.
-	if h < 3 && available >= 3 {
+	// Boost editor to a minimum usable size only when the results pane can
+	// still keep at least one row; otherwise prefer preserving results.
+	if h < 3 && available >= 4 {
 		h = 3
 	} else if h < 1 {
 		h = 1
 	}
-	if h > available {
-		h = available
+	if h >= available {
+		h = max(available-1, 1)
 	}
 	return h
 }
