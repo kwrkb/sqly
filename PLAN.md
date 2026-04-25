@@ -21,9 +21,9 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - Phase 2 Multi-DB: 複数接続同時保持 (2-1)、同一クエリ別DB実行 (2-2)、横並び表示 (2-3) 完了
 - CLI: `--help` / `--version`、README 整備済み (v0.6.0)
 - テストカバレッジ拡充 (Issue #14, PR #35): MySQL/PostgreSQL アダプタ + UI (insert/sidebar/profile) テスト追加完了
-- Phase 4 着手: 4-1/4-2/4-3 Column Statistics Overlay (PR #36)、4-4 Sparkline (PR #38)
+- Phase 4 完了: 4-1/4-2/4-3 Column Statistics Overlay (PR #36)、4-4 Sparkline (PR #38)、4-5 Histogram (PR #40)
 - コード品質改善 (PR #39): バグ修正・重複解消・パフォーマンス防御・設計改善
-- **次: Phase 4-5 (ヒストグラム) または Phase 3**
+- **次: Phase 3 (Bring & Join)**
 
 ## 直近完了: コード品質・パフォーマンス改善 (PR #39)
 
@@ -43,7 +43,7 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - 18ファイル変更、+299/-247行
 - 全14パッケージのテスト・`go vet` パス
 
-## Phase 2: Multi-DB Observation — 比較の完成（最優先）
+## Phase 2: Multi-DB Observation — 比較の完成（完了）
 
 目的：**「観察を加速する」**。本番と検証、異種DB間の「差」を浮き彫りにする。
 
@@ -52,7 +52,7 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - [x] 2-3. 横並び表示 (2つの結果セットを画面分割で並べて比較)
 - [x] 2-4. 差分ハイライト (件数差・値の違いに即座に気づかせる)
 
-## Phase 4: Light Insight Helpers（次の候補）
+## Phase 4: Light Insight Helpers（完了）
 
 目的：**「軽さを損なわない範囲で、気づきを増やす」**。
 比較観察と相性が良い。Phase 2 完了後に着手。
@@ -61,7 +61,7 @@ Bring & Join (Phase 3) はまだ先。比較体験が磨き込まれてから。
 - [x] 4-2. distinct数表示 (PR #36: 同上)
 - [x] 4-3. min/max表示 (PR #36: 同上)
 - [x] 4-4. 件数推移の簡易表示 (PR #38: Stats overlay でカーソル行にスパークライン表示)
-- [ ] 4-5. 簡易ヒストグラム表示 (将来)
+- [x] 4-5. 簡易ヒストグラム表示 (PR #40: Stats overlay で数値列に Unicode ブロック文字のヒストグラム表示)
 
 ## Phase 3: Bring & Join（後回し）
 

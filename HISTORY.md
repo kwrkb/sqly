@@ -2,9 +2,21 @@
 
 これまでに完了した主要な機能・マイルストーンの記録。
 
+## Phase 4: Histogram (4-5)
+**PR**: #40
+**実装**: Stats overlay (`d` キー) で数値列に Unicode ブロック文字のヒストグラム (▁▂▅█▇▃▁) を表示。等幅 binning（最大 20 bin）、`renderSparklineBars` を再利用。BIGINT UNSIGNED ラベルのオーバーフロー、混合型列（>50% パース失敗で抑制）、NaN/Inf 除外、10,000 行上限のガードを実装。`detectNumericColumn` は word-boundary マッチで INTERVAL/POINT 等の誤検出を回避。
+
+---
+
 ## コード品質・パフォーマンス改善
 **PR**: #39
 **実装**: Codex 静的分析に基づく横断的改善。(A) バグ修正: stats 境界チェック、sparkline panic 除去、AI エラー情報露出制限。(B) 重複解消: DB 接続生成を `opener` パッケージに一本化、`containsReturning` を `dbutil.ContainsReturning` に共通化（~170行削減）。(C) パフォーマンス: ScanRows 10,000行上限、Stats 計算の非同期化。(D) 設計: config 警告を戻り値化。18ファイル、+299/-247行。
+
+---
+
+## Phase 4: Sparkline (4-4)
+**PR**: #38
+**実装**: Stats overlay でカーソル行の日付/タイムスタンプ列をスパークライン (▁▂▅█▇▃▁) として表示。日次/月次の bucketing、最大幅制限、`truncateTime`/`bucketKey` のフォールバック処理（panic 除去は PR #39）。
 
 ---
 
