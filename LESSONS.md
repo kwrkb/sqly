@@ -147,7 +147,7 @@ Wait+Screen /alice@example\.com/
 
 **文脈**: vim 風に `i` で INSERT モードに入る想定で tape に `Type "i"` を入れたところ、文字 `i` がエディタに入力されてしまった。
 
-**学び**: asql は `mode: insertMode` で起動する（`model.go:230`）。起動直後は既に INSERT モードなので、`Ctrl+l` でエディタをクリアしてからクエリを入力する。
+**学び**: asql は `mode: insertMode` で起動する（`internal/ui/model.go` の初期 model 構築箇所）。起動直後は既に INSERT モードなので、`Ctrl+l` でエディタをクリアしてからクエリを入力する。
 
 ---
 
@@ -471,15 +471,18 @@ type model struct {
 
 **学び**: 複数のオーバーレイで共通する「幅計算」と「背景上にセンタリング配置」は小さなヘルパー関数に抽出する。コード量は少ないが、一貫性の保証とバグの一箇所修正が目的。
 
-**パターン**: `overlay.go` に2つの関数を置く:
+**パターン**: `overlay.go` に2つの関数を置く（`calcModalWidth` の下限は実画面幅でクランプし、極端に狭い端末でもはみ出さないようにする）:
 ```go
 func calcModalWidth(screenWidth, maxWidth int) int {
     w := min(screenWidth-4, maxWidth)
-    if w < 20 { w = 20 }
+    minWidth := min(20, max(screenWidth, 1))
+    if w < minWidth {
+        w = minWidth
+    }
     return w
 }
 
-func overlayModal(screenWidth int, background, modal string) string {
+func overlayModal(screenWidth int, background string, modal string) string {
     bgH := lipgloss.Height(background)
     return lipgloss.Place(screenWidth, bgH, lipgloss.Center, lipgloss.Center, modal,
         lipgloss.WithWhitespaceBackground(appBackground))
@@ -677,6 +680,8 @@ if err != nil {
 ### Codex の sandbox モードは `--resume` では切り替わらない
 - 前回 read-only sandbox で起動した Codex タスクを `--resume` で再開しても read-only のままで、ファイル書き込みが必要なフォローアップタスクが失敗した
 - **ルール**: 前回タスクが調査・読み取りで起動していた場合、書き込みを伴う続行タスクは `--fresh` で再投入する。Codex は前回スレッドの分析を保持しているので、同じ指示を新スレッドで投げ直して問題ない
+
+---
 
 ## PR レビュー対応 (2026-04-30)
 
