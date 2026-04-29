@@ -128,6 +128,7 @@ func (m model) switchProfile(p profile.Profile, reExecute bool) (tea.Model, tea.
 
 func (m model) renderWithProfileOverlay(background string) string {
 	modalWidth := calcModalWidth(m.width, 60)
+	m.profileSt.input.Width = max(modalWidth-12, 1)
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -144,20 +145,20 @@ func (m model) renderWithProfileOverlay(background string) string {
 	itemStyle := lipgloss.NewStyle().
 		Foreground(textColor).
 		Background(panelBackground).
-		Width(modalWidth - 6).
+		Width(modalWidth-6).
 		Padding(0, 1)
 
 	selectedStyle := lipgloss.NewStyle().
 		Foreground(panelBackground).
 		Background(accentColor).
 		Bold(true).
-		Width(modalWidth - 6).
+		Width(modalWidth-6).
 		Padding(0, 1)
 
 	dsnPreviewStyle := lipgloss.NewStyle().
 		Foreground(mutedTextColor).
 		Background(panelBackground).
-		Width(modalWidth - 6).
+		Width(modalWidth-6).
 		Padding(0, 1)
 
 	var items strings.Builder
